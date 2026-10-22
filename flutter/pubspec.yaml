@@ -1,0 +1,50 @@
+name: centwise
+description: Centwise 记账 — Flutter 版（iPhone + Mac 预览）。
+publish_to: none
+version: 0.2.0+1
+
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+  flutter: ">=3.27.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  # Lucide icons are bundled as SVG data (lib/app/lucide_icons.dart) and drawn with flutter_svg.
+  flutter_svg: ^2.0.10
+  path_provider: ^2.1.4
+  file_picker: ^8.1.2
+  # Money Pro database import (read-only).
+  sqlite3: ^2.4.6
+  sqlite3_flutter_libs: ^0.5.24
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    # Fluent Emoji 3D (Microsoft, MIT licence, assets/emoji3d/LICENSE-fluent-emoji.txt), category icons.
+    - assets/emoji3d/
+    # Round flags for the currency picker (from the designer's country_icon set).
+    - assets/flags/
+    # Empty-state illustrations drawn for Centwise (light + -dark variants).
+    - assets/illustrations/
+  fonts:
+    # Nunito (SIL Open Font License, assets/fonts/OFL-Nunito.txt), static instances of the variable font.
+    - family: Nunito
+      fonts:
+        - asset: assets/fonts/Nunito-400.ttf
+          weight: 400
+        - asset: assets/fonts/Nunito-500.ttf
+          weight: 500
+        - asset: assets/fonts/Nunito-600.ttf
+          weight: 600
+        - asset: assets/fonts/Nunito-700.ttf
+          weight: 700
+        - asset: assets/fonts/Nunito-800.ttf
+          weight: 800

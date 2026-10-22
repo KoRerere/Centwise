@@ -1,0 +1,26 @@
+.build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.qingledger
+*.sql
+PrivateData/
+.DS_Store
+
+# Local backups and development logs
+/.backups/
+/Money Pro 数据备份*/
+/flutter-lib-备份*/
+.dev-logs*/
+
+# Private ledger data and local credentials
+*.centwise
+.env
+.env.*
+!.env.example
+!.env.sample
+*.p12
+*.pfx
+*.mobileprovision
+*.pem
+*.key

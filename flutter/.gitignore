@@ -1,0 +1,19 @@
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+*.iml
+.idea/
+# Generated host-project artefacts
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+macos/Flutter/ephemeral/
+macos/Pods/
+# Private ledger data and backups
+*.centwise
+*.qingledger
+*.sql

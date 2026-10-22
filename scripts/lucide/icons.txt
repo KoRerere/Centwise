@@ -1,0 +1,28 @@
+# Lucide icons compiled into Centwise (one name per line, as shown on https://lucide.dev/icons/).
+# After editing, run: bash scripts/update-lucide.sh
+
+# Navigation & actions
+chevron-left
+chevron-right
+plus
+circle-plus
+circle-minus
+check
+search
+circle-x
+settings
+pencil-line
+
+# Data & backup
+upload
+download
+file-down
+shield-check
+circle-alert
+text-align-start
+list-filter
+layout-grid
+
+# Money
+wallet
+calendar

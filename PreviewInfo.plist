@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleName</key><string>Centwise Preview</string>
+  <key>CFBundleDisplayName</key><string>Centwise Preview</string>
+  <key>CFBundleExecutable</key><string>LedgerPreview</string>
+  <key>CFBundleIdentifier</key><string>com.koray.centwise.preview</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>0.1.0</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>LSMinimumSystemVersion</key><string>14.0</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>LSEnvironment</key><dict><key>CENTWISE_DEMO</key><string>1</string></dict>
+  <key>CFBundleDocumentTypes</key><array><dict><key>CFBundleTypeName</key><string>Centwise 备份</string><key>CFBundleTypeRole</key><string>Editor</string><key>LSHandlerRank</key><string>Owner</string><key>LSItemContentTypes</key><array><string>com.koray.qingledger.backup</string></array></dict></array>
+  <key>UTExportedTypeDeclarations</key><array><dict><key>UTTypeIdentifier</key><string>com.koray.qingledger.backup</string><key>UTTypeDescription</key><string>Centwise 完整备份</string><key>UTTypeConformsTo</key><array><string>public.json</string></array><key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>qingledger</string></array></dict></dict></array>
+</dict></plist>
