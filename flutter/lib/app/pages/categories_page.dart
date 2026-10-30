@@ -4,8 +4,8 @@ import '../../core/models.dart';
 import '../../core/money.dart';
 import '../charts.dart';
 import '../components.dart';
+import '../entry_editor.dart' show CategoryChooser;
 import '../icons.dart';
-import '../motion.dart';
 import '../sheets.dart';
 import '../store.dart';
 import '../theme.dart';
@@ -80,10 +80,7 @@ class CategoriesPage extends StatelessWidget {
       groups.add(_CategoryGroup(head, children));
     }
     groups.sort((a, b) => byAmount(a.head, b.head));
-    final hidden = topLevel.length - groups.length;
-    final spentHeader = switch (store.period) { Period.day => tr('今日', {}, 'spent'), Period.month => tr('已支出'), Period.year => tr('近一年', {}, 'spent') };
     final emptyText = switch (store.period) { Period.day => tr('这一天还没有支出'), Period.month => tr('本月还没有支出'), Period.year => tr('近一年还没有支出') };
-    final monthName = fmtYearMonth(store.month);
 
     // Colours by rank this period (largest first), so neighbouring slices and dots never share a colour.
     final topSpending = ledger.topLevelSpendingIn(store.entriesIn(store.interval));
@@ -94,16 +91,15 @@ class CategoriesPage extends StatelessWidget {
 
     return PageList(children: [
       _PeriodSummary(spending: topSpending, tints: tints, emptyText: emptyText),
-      // Rows
+      // Rows. With nothing to list the summary card above already shows the empty state, and the
+      // whole block is left out (an empty block would still take a PageList gap, doubling the space).
+      if (groups.isNotEmpty)
       Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        // With nothing to list, the summary card above already shows the empty state.
-        if (groups.isNotEmpty)
         CwCard(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          child: _CategoryTable(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+          child: _CategoryGrid(
                   groups: groups,
                   tints: tints,
-                  spentHeader: spentHeader,
                   onOpen: (line) => _openCategory(context, line.category,
                       includeSubcategories: !line.directOnly,
                       title: line.directOnly ? tr('{name} · 未细分', {'name': line.category.name}) : null),
@@ -114,21 +110,14 @@ class CategoriesPage extends StatelessWidget {
         if (groups.isNotEmpty) ...[
           const SizedBox(height: 10),
           Row(children: [
-            Expanded(
-              child: Text(
-                store.period == Period.month && hidden > 0
-                    ? tr('另有 {n} 个分类本月没有支出', {'n': hidden})
-                    : tr('点分类查看账单；进度条为 {month} 预算', {'month': monthName}),
-                style: cw(12, color: p.muted),
-              ),
-            ),
+            const Spacer(),
             // For a category that isn't listed yet (no spending this period).
             Pressable(
               onTap: () => _openBudget(context, categoryID: groups.first.head.category.id),
               child: Row(children: [
                 LIcon('plus', size: 14, color: p.accent, strokeWidth: 2.5),
                 const SizedBox(width: 3),
-                Text(tr('分类预算'), style: cw(13, weight: FontWeight.w600, color: p.accent)),
+                Text(tr('分类预算'), style: cw(IOSText.footnote, weight: FontWeight.w600, color: p.accent)),
               ]),
             ),
           ]),
@@ -172,180 +161,62 @@ class _CategoryGroup {
   final List<_CategoryLine> children;
 }
 
-/// Column titles plus the two-level rows. A top-level category with subcategories expands / collapses
-/// on tap (Money Pro style); one without opens its bills directly.
-class _CategoryTable extends StatefulWidget {
-  const _CategoryTable({required this.groups, required this.tints, required this.spentHeader, required this.onOpen, required this.onBudget});
+/// The period's category spending as a five-per-row tile grid: emoji disc, name and the amount, in
+/// rank order. Tap opens the category's bills (subcategories included); a long press sets its budget.
+class _CategoryGrid extends StatelessWidget {
+  const _CategoryGrid({required this.groups, required this.tints, required this.onOpen, required this.onBudget});
   final List<_CategoryGroup> groups;
   final Map<String, Color> tints;
-  final String spentHeader;
   final void Function(_CategoryLine) onOpen;
   final void Function(_CategoryLine) onBudget;
 
   @override
-  State<_CategoryTable> createState() => _CategoryTableState();
-}
-
-class _CategoryTableState extends State<_CategoryTable> {
-  final Set<String> _expanded = {};
-
-  @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    return Column(children: [
-      // Column titles live inside the card (readable over any background) and only when there are rows.
-      Padding(
-        padding: const EdgeInsets.only(top: 8, bottom: 6),
-        child: DefaultTextStyle.merge(
-          style: cw(12, weight: FontWeight.w500, color: p.muted),
-          child: Row(children: [
-            Expanded(child: Text(tr('分类'))),
-            SizedBox(width: 76, child: Text(widget.spentHeader, textAlign: TextAlign.right)),
-            const SizedBox(width: 82),
-            SizedBox(width: 62, child: Text(tr('月预算'), textAlign: TextAlign.right)),
-          ]),
-        ),
-      ),
-      Divider(height: 1, thickness: 0.5, color: p.cardStroke),
-      for (final group in widget.groups) ...[
-        () {
-          final id = group.head.category.id;
-          final open = _expanded.contains(id);
-          final expandable = group.children.isNotEmpty;
-          return _CategoryRow(
-            line: group.head,
-            tint: widget.tints[group.head.category.id],
-            expanded: expandable ? open : null,
-            onOpen: expandable
-                ? () {
-                    tick();
-                    setState(() => open ? _expanded.remove(id) : _expanded.add(id));
-                  }
-                : () => widget.onOpen(group.head),
-            onBudget: () => widget.onBudget(group.head),
-          );
-        }(),
-        AnimatedSize(
-          duration: IOSMotion.smoothCurve.duration,
-          curve: IOSMotion.smoothCurve,
-          alignment: Alignment.topCenter,
-          child: _expanded.contains(group.head.category.id)
-              ? Column(children: [
-                  for (final child in group.children)
-                    _CategoryRow(
-                      line: child,
-                      child: true,
-                      onOpen: () => widget.onOpen(child),
-                      onBudget: () => widget.onBudget(child),
-                    ),
-                ])
-              : const SizedBox(width: double.infinity),
-        ),
-      ],
-    ]);
-  }
-}
-
-class _CategoryRow extends StatelessWidget {
-  const _CategoryRow({required this.line, this.tint, this.expanded, this.child = false, required this.onOpen, required this.onBudget});
-  final _CategoryLine line;
-
-  /// Dot colour matching the donut (rank colour); falls back to the category's own colour.
-  final Color? tint;
-
-  /// null: no subcategories; otherwise whether they are shown (draws a disclosure chevron).
-  final bool? expanded;
-
-  /// A subcategory row: indented, a little smaller, no colour dot.
-  final bool child;
-  LedgerCategory get category => line.category;
-  int get spent => line.spent;
-  Budget? get budget => line.budget;
-  int get monthSpent => line.monthSpent;
-
-  /// Name, amount and bar: this category's bills.
-  final VoidCallback onOpen;
-
-  /// Only the right-hand "设预算 / 预算金额" cell edits the budget.
-  final VoidCallback onBudget;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = Palette.of(context);
-    final tint = this.tint ?? categoryTint(category.id);
-    final ratio = budget == null ? 0.0 : monthSpent / (budget!.limit <= 0 ? 1 : budget!.limit);
-    return Row(children: [
-      Expanded(
-        child: Pressable(
-          semanticLabel: tr('{name}的账单', {'name': category.name}),
-          onTap: onOpen,
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: child ? 11 : 14),
-            child: Row(children: [
-              if (child)
-                const SizedBox(width: 15)
-              else ...[
-                Container(width: 7, height: 7, decoration: BoxDecoration(color: tint, shape: BoxShape.circle)),
-                const SizedBox(width: 8),
-              ],
-              SizedBox(width: 18, child: CategoryIcon(category, size: child ? 14 : 15, color: tint)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Row(children: [
-                  Flexible(
-                    child: Text(line.directOnly ? tr('未细分') : category.name,
-                        style: cw(child ? 14 : 15, weight: FontWeight.w400, color: child ? p.ink.withValues(alpha: 0.85) : p.ink),
+    final lines = [for (final g in groups) g.head];
+    return GridView.count(
+      crossAxisCount: 5,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 6,
+      mainAxisExtent: 104,
+      children: [
+        for (final line in lines)
+          Pressable(
+            semanticLabel: line.category.name,
+            onTap: () => onOpen(line),
+            onLongPress: () => onBudget(line),
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(color: p.canvas, shape: BoxShape.circle),
+                child: Center(child: CategoryIcon(line.category, size: 26)),
+              ),
+              const SizedBox(height: 5),
+              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(color: tints[line.category.id] ?? p.muted, shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 4),
+                Flexible(
+                    child: Text(line.category.name,
                         maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                  ),
-                  if (expanded != null) ...[
-                    const SizedBox(width: 2),
-                    AnimatedRotation(
-                      turns: expanded! ? 0.25 : 0,
-                      duration: IOSMotion.snappyCurve.duration,
-                      curve: IOSMotion.snappyCurve,
-                      child: LIcon('chevron-right', size: 18, color: p.muted, strokeWidth: 2.2),
-                    ),
-                  ],
-                ]),
-              ),
-              SizedBox(
-                width: 76,
-                child: Align(
-                    alignment: Alignment.centerRight,
-                    child: AmountText(spent, size: child ? 13 : 14, weight: child ? FontWeight.w400 : FontWeight.w600, color: p.ink)),
-              ),
-              const SizedBox(width: 8),
-              // The bar is this month's budget progress; without a budget there is nothing to show.
-              SizedBox(width: 66, child: budget == null ? null : BudgetBar(ratio: ratio)),
+                        overflow: TextOverflow.ellipsis,
+                        style: cw(12, weight: FontWeight.w500, color: p.ink))),
+              ]),
+              const SizedBox(height: 2),
+              AmountText(line.spent, size: 12, weight: FontWeight.w600, color: p.ink),
             ]),
           ),
-        ),
-      ),
-      // The "未细分" row shares its parent's budget, which the parent row already shows.
-      if (line.directOnly)
-        const SizedBox(width: 70)
-      else
-      Pressable(
-        semanticLabel: budget == null ? tr('为{name}设预算', {'name': category.name}) : tr('修改{name}预算', {'name': category.name}),
-        onTap: onBudget,
-        child: Padding(
-          padding: EdgeInsets.only(left: 8, top: child ? 11 : 14, bottom: child ? 11 : 14),
-          child: SizedBox(
-            width: 62,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: budget == null
-                  ? Text(tr('设预算'), style: cw(13, color: p.accent))
-                  : AmountText(budget!.limit, size: 13, weight: FontWeight.w400, color: p.accent),
-            ),
-          ),
-        ),
-      ),
-    ]);
+      ],
+    );
   }
 }
-
 /// Spending in the selected period by category: donut, total and the three largest shares.
 class _PeriodSummary extends StatelessWidget {
   const _PeriodSummary({required this.spending, required this.tints, required this.emptyText});
@@ -362,7 +233,8 @@ class _PeriodSummary extends StatelessWidget {
     if (total <= 0) {
       // No spending in this period: say so instead of drawing an empty ring.
       return CwCard(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 20),
+        // The dotted empty state fills the whole card.
+        padding: EdgeInsets.zero,
         child: Center(
           child: EmptyState(icon: 'piggy-bank', illustration: 'wallet', title: emptyText, message: tr('有支出后，这里会按分类显示占比')),
         ),
@@ -387,7 +259,7 @@ class _PeriodSummary extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             AmountText(total, size: 22, weight: FontWeight.w700, color: p.ink),
             const SizedBox(height: 2),
-            Text(tr('{period}支出', {'period': periodLabel}), style: cw(13, color: p.muted)),
+            Text(tr('{period}支出', {'period': periodLabel}), style: cw(IOSText.footnote, color: p.muted)),
             const SizedBox(height: 10),
             for (final (category, value) in slices.take(3))
               Padding(
@@ -396,9 +268,9 @@ class _PeriodSummary extends StatelessWidget {
                   Container(width: 7, height: 7, decoration: BoxDecoration(color: tints[category.id] ?? categoryTint(category.id), shape: BoxShape.circle)),
                   const SizedBox(width: 6),
                   Expanded(
-                    child: Text(category.name, style: cw(13, color: p.ink), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    child: Text(category.name, style: cw(IOSText.footnote, color: p.ink), maxLines: 1, overflow: TextOverflow.ellipsis),
                   ),
-                  Text(percent(value), style: cw(13, color: p.muted)),
+                  Text(percent(value), style: cw(IOSText.footnote, color: p.muted)),
                 ]),
               ),
             // The rest, so the legend always adds up to 100 %.
@@ -408,8 +280,8 @@ class _PeriodSummary extends StatelessWidget {
                 child: Row(children: [
                   Container(width: 7, height: 7, decoration: BoxDecoration(color: p.muted.withValues(alpha: 0.5), shape: BoxShape.circle)),
                   const SizedBox(width: 6),
-                  Expanded(child: Text(tr('其他 {n} 类', {'n': slices.length - 3}), style: cw(13, color: p.muted))),
-                  Text(percent(slices.skip(3).fold<int>(0, (s, e) => s + e.$2)), style: cw(13, color: p.muted)),
+                  Expanded(child: Text(tr('其他 {n} 类', {'n': slices.length - 3}), style: cw(IOSText.footnote, color: p.muted))),
+                  Text(percent(slices.skip(3).fold<int>(0, (s, e) => s + e.$2)), style: cw(IOSText.footnote, color: p.muted)),
                 ]),
               ),
           ]),
@@ -440,17 +312,7 @@ class _MonthBudgetCard extends StatelessWidget {
       return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         CardCaption(caption),
         const SizedBox(height: 10),
-        Pressable(
-          onTap: edit,
-          child: CwCard(
-            child: Row(children: [
-              LIcon('piggy-bank', size: 20, color: p.accent),
-              const SizedBox(width: 10),
-              Expanded(child: Text(tr('这个月还没有预算'), style: cw(15, color: p.ink))),
-              Text(tr('设预算'), style: cw(15, weight: FontWeight.w600, color: p.accent)),
-            ]),
-          ),
-        ),
+        BudgetSetupCard(onTap: edit),
       ]);
     }
 
@@ -461,7 +323,7 @@ class _MonthBudgetCard extends StatelessWidget {
     final ratio = spent / (limit <= 0 ? 1 : limit);
     Widget metric(String title, Widget value) => Expanded(
           child: Column(children: [
-            Text(title, style: cw(12, color: p.muted)),
+            Text(title, style: cw(IOSText.footnote, color: p.muted)),
             const SizedBox(height: 4),
             value,
           ]),
@@ -475,12 +337,12 @@ class _MonthBudgetCard extends StatelessWidget {
         CwCard(
           child: Column(children: [
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              metric(tr('已花'), AmountText(spent, size: 16, weight: FontWeight.w700, color: p.ink)),
-              metric(tr('预算'), AmountText(limit, size: 16, weight: FontWeight.w700, color: p.ink)),
+              metric(tr('已花'), AmountText(spent, size: IOSText.body, weight: FontWeight.w600, color: p.ink)),
+              metric(tr('预算'), AmountText(limit, size: IOSText.body, weight: FontWeight.w600, color: p.ink)),
               metric(
                 remaining < 0 ? tr('超出预算') : tr('剩余'),
                 Row(mainAxisSize: MainAxisSize.min, children: [
-                  AmountText(remaining.abs(), size: 16, weight: FontWeight.w700, sign: '', color: remaining < 0 ? p.over : p.ink),
+                  AmountText(remaining.abs(), size: IOSText.body, weight: FontWeight.w600, sign: '', color: remaining < 0 ? p.over : p.ink),
                   const SizedBox(width: 4),
                   Container(width: 6, height: 6, decoration: BoxDecoration(color: remaining < 0 ? p.over : p.under, shape: BoxShape.circle)),
                 ]),
@@ -512,7 +374,7 @@ class BudgetCard extends StatelessWidget {
     final name = budget.categoryID == null ? tr('月度总预算') : tr('{name}预算', {'name': store.category(budget.categoryID!)?.name ?? tr('分类')});
     Widget metric(String title, Widget value) => Expanded(
           child: Column(children: [
-            Text(title, style: cw(12, color: p.muted)),
+            Text(title, style: cw(IOSText.footnote, color: p.muted)),
             const SizedBox(height: 4),
             value,
           ]),
@@ -528,12 +390,12 @@ class BudgetCard extends StatelessWidget {
       CwCard(
         child: Column(children: [
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            metric(tr('已花'), AmountText(spent, size: 16, weight: FontWeight.w700, color: p.ink)),
-            metric(tr('预算'), AmountText(budget.limit, size: 16, weight: FontWeight.w700, color: p.ink)),
+            metric(tr('已花'), AmountText(spent, size: IOSText.body, weight: FontWeight.w600, color: p.ink)),
+            metric(tr('预算'), AmountText(budget.limit, size: IOSText.body, weight: FontWeight.w600, color: p.ink)),
             metric(
               remaining < 0 ? tr('超出') : tr('剩余'),
               Row(mainAxisSize: MainAxisSize.min, children: [
-                AmountText(remaining.abs(), size: 16, weight: FontWeight.w700, sign: '', color: p.ink),
+                AmountText(remaining.abs(), size: IOSText.body, weight: FontWeight.w600, sign: '', color: p.ink),
                 const SizedBox(width: 4),
                 Container(width: 6, height: 6, decoration: BoxDecoration(color: remaining < 0 ? p.over : p.under, shape: BoxShape.circle)),
               ]),
@@ -629,16 +491,45 @@ class _BudgetEditorState extends State<BudgetEditor> {
     }
   }
 
+  /// What the chosen 范围 counts, in one line under the card.
+  String _scopeFooter(LedgerStore store) {
+    if (_categoryID.isEmpty) return tr('统计当月所有支出，和各分类预算分开计算，不会相加。');
+    final name = store.category(_categoryID)?.name ?? tr('分类');
+    return store.ledger.childrenOf(_categoryID).isEmpty
+        ? tr('只统计「{name}」的支出。', {'name': name})
+        : tr('统计「{name}」及其所有子分类的支出。', {'name': name});
+  }
+
+  /// 范围 opens the same emoji-grid category sheet as 记一笔, with 全部支出 first.
+  Future<void> _chooseScope() async {
+    final store = StoreScope.read(context);
+    FocusScope.of(context).unfocus();
+    final id = await showCwSheet<String>(
+      context,
+      (_) => StoreScope(
+        store: store,
+        child: CategoryChooser(
+          kind: EntryKind.expense,
+          selectedID: _categoryID,
+          title: tr('选择范围'),
+          leadingLabel: tr('全部支出'),
+          parentSubtitle: tr('含子分类'),
+          showAdd: false,
+        ),
+      ),
+    );
+    if (id != null && mounted) setState(() => _categoryID = id);
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
-    final expenseCategories = store.ledger.categories.where((c) => c.kind == EntryKind.expense).toList();
-    final options = ['', ...expenseCategories.map((c) => c.id)];
     return SheetScaffold(
       title: widget.budget == null ? tr('新预算') : tr('编辑预算'),
       trailingLabel: tr('保存'),
       onTrailing: _canSave ? _save : null,
-      body: ListView(padding: const EdgeInsets.all(18), children: [
+      // Same insets as 设置: 16 pt to the cards' edges.
+      body: ListView(clipBehavior: Clip.none, padding: const EdgeInsets.fromLTRB(16, 18, 16, 32), children: [
         CapsuleSegments<bool>(
           values: const [true, false],
           selected: _thisMonthOnly,
@@ -648,31 +539,35 @@ class _BudgetEditorState extends State<BudgetEditor> {
         const SizedBox(height: 8),
         Text(
           _thisMonthOnly
-              ? tr('只在 {month} 有效；这个月会优先使用它，而不是每月预算。', {'month': fmtYearMonth(store.month)})
-              : tr('每个月都会自动套用。'),
+              ? tr('只在 {month} 生效，这个月会替代每月预算。', {'month': fmtYearMonth(store.month)})
+              : tr('每个月自动生效；某个月另设了本月预算时，以本月预算为准。'),
           textAlign: TextAlign.center,
-          style: cw(12, color: Palette.of(context).muted),
+          style: cw(IOSText.footnote, color: Palette.of(context).muted),
         ),
         const SizedBox(height: 18),
         FormSection(
-          footer: tr('每个范围可以有一个每月预算，并为某个月另设本月预算。总预算与分类预算各自独立，不相加。一级分类的预算包含它所有子分类的支出，和分类列表的合计一致。'),
+          footer: _scopeFooter(store),
           children: [
             FormRow(
               icon: 'chart-pie',
               label: tr('范围'),
-              trailing: MenuPicker<String>(
-                value: _categoryID,
-                options: options,
-                label: (id) {
-                  if (id.isEmpty) return tr('全部支出');
-                  final name = store.category(id)?.name ?? tr('分类');
-                  return store.ledger.childrenOf(id).isEmpty ? name : tr('{name}（含子分类）', {'name': name});
-                },
-                onChanged: (id) => setState(() => _categoryID = id),
+              chevron: true,
+              trailing: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 190),
+                child: Text(
+                  _categoryID.isEmpty
+                      ? tr('全部支出')
+                      : store.ledger.childrenOf(_categoryID).isEmpty
+                          ? store.category(_categoryID)?.name ?? tr('分类')
+                          : tr('{name}（含子分类）', {'name': store.category(_categoryID)?.name ?? tr('分类')}),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
+              onTap: _chooseScope,
             ),
             LabeledField(
-              icon: 'banknote',
+              icon: 'coins',
               label: tr('预算金额（{code}）', {'code': store.ledger.currency}),
               controller: _amount,
               hint: tr('例如 3000'),
@@ -689,6 +584,55 @@ class _BudgetEditorState extends State<BudgetEditor> {
           FormSection(children: [FormRow(icon: 'trash', label: tr('删除预算'), destructive: true, onTap: _delete)]),
         ],
       ]),
+    );
+  }
+}
+
+/// The "no budget yet" card, used wherever the app offers to set one (分类 and 概览): a Settings-style
+/// icon tile, a title with one line of why, a filled 设定 capsule as the single action, and an empty
+/// budget bar with this month's spending so far — a preview of what the card turns into.
+class BudgetSetupCard extends StatelessWidget {
+  const BudgetSetupCard({super.key, required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    final p = Palette.of(context);
+    return Pressable(
+      onTap: onTap,
+      child: CwCard(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            const FormIconTile('piggy-bank'),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(tr('这个月还没有预算'), style: cw(IOSText.body, weight: FontWeight.w600, color: p.ink)),
+                const SizedBox(height: 2),
+                Text(tr('设定每月上限，随时知道还能花多少'), style: cw(IOSText.footnote, color: p.muted)),
+              ]),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              height: 32,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(color: p.brand, borderRadius: BorderRadius.circular(99)),
+              alignment: Alignment.center,
+              child: Text(tr('设定'), style: cw(IOSText.subheadline, weight: FontWeight.w600, color: p.onBrand)),
+            ),
+          ]),
+          const SizedBox(height: 14),
+          Container(height: 6, decoration: BoxDecoration(color: p.track, borderRadius: BorderRadius.circular(3))),
+          const SizedBox(height: 8),
+          Row(children: [
+            Text(tr('本月已支出'), style: cw(IOSText.footnote, color: p.muted)),
+            const Spacer(),
+            AmountText(store.ledger.total(EntryKind.expense, store.month), size: IOSText.footnote, weight: FontWeight.w600, sign: '', color: p.muted, brand: false),
+          ]),
+        ]),
+      ),
     );
   }
 }

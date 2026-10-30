@@ -26,6 +26,18 @@ void main() {
     expect(() => Money.parse('NaN'), throwsA(isA<LedgerError>()));
     expect(() => Money.parse('1,000'), throwsA(isA<LedgerError>()));
     expect(() => Money.parse('999999999999999999999999'), throwsA(isA<LedgerError>()));
+    // Keypad calculations: × ÷ before + −, exact rationals, rounded half away from zero to fen.
+    expect(Money.parse('12.5+8×2'), 2850);
+    expect(Money.parse('0.1+0.2'), 30);
+    expect(Money.parse('10÷3'), 333);
+    expect(Money.parse('2-5'), -300);
+    expect(Money.parse('-12.5×2'), -2500);
+    expect(() => Money.parse('1+'), throwsA(isA<LedgerError>()));
+    expect(() => Money.parse('1×'), throwsA(isA<LedgerError>()));
+    expect(() => Money.parse('-'), throwsA(isA<LedgerError>()));
+    expect(() => Money.parse('5÷0'), throwsA(isA<LedgerError>()));
+    expect(() => Money.parse('+5'), throwsA(isA<LedgerError>()));
+    expect(() => Money.parse('1.2.3'), throwsA(isA<LedgerError>()));
     expect(Money.legacy('26.140000000000001'), 2614);
     expect(Money.legacy('1e-7'), 0);
     expect(() => Money.legacy('1.2345'), throwsA(isA<LedgerError>()));
@@ -218,6 +230,32 @@ void main() {
     expect(() => LedgerFiles.createNew(utf8.encode('replacement'), path), throwsA(isA<LedgerError>()));
     expect(File(path).readAsStringSync(), 'original');
     expect(directory.listSync().map((e) => e.uri.pathSegments.last).toList(), ['backup.centwise']);
+  });
+
+  test('subscriptions: monthly average, this month, month-end days, codec', () {
+    final ledger = sample();
+    expect(ledger.toJson().containsKey('subscriptions'), isFalse); // old files stay unchanged
+    ledger.subscriptions = [
+      Subscription(name: 'A', amount: 3000, nextDate: DateTime(2026, 10, 31)),
+      Subscription(name: 'B', amount: 9000, cycle: BillingCycle.quarterly, nextDate: DateTime(2026, 11, 5)),
+      Subscription(name: 'C', amount: 12000, cycle: BillingCycle.yearly, nextDate: DateTime(2027, 3, 1)),
+      Subscription(name: 'D', amount: 5000, nextDate: DateTime(2026, 10, 1), cancelled: true),
+    ];
+    // 30 + 90/3 + 120/12 = 70; the cancelled one doesn't count.
+    expect(ledger.subscriptionMonthlyAverage, 7000);
+    // Monthly on the 31st: Nov 30, then back to Dec 31.
+    final a = ledger.subscriptions[0];
+    expect(a.after(a.nextDate), DateTime(2026, 11, 30));
+    expect(a.after(a.after(a.nextDate)), DateTime(2026, 12, 31));
+    // November: A on the 30th, B on the 5th.
+    expect(ledger.subscriptionChargesIn(DateTime(2026, 11)), 12000);
+    // A charge already booked this month still counts, and is never counted twice.
+    a.charged.add('2026-10-31');
+    expect(ledger.subscriptionChargesIn(DateTime(2026, 10)), 3000);
+    final decoded = LedgerCodec.decode(LedgerCodec.encode(ledger));
+    expect(json(decoded), json(ledger));
+    expect(decoded.subscriptions[0].anchorDay, 31);
+    expect(decoded.subscriptions[3].cancelled, isTrue);
   });
 
   /// Opt-in integration check with a local Money Pro database; real data is never a fixture.

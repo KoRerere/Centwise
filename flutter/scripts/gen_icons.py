@@ -18,7 +18,7 @@ utensils train-front shopping-bag house sparkles ellipsis briefcase gift heart b
 layout-grid folder-search credit-card archive piggy-bank arrow-left-right arrow-down-to-line
 arrow-up-right arrow-down-left equal calendar text-align-start lock info delete circle-alert
 list-filter circle-x split chart-pie download upload coffee pill car plane gamepad-2
-graduation-cap shirt baby dumbbell smartphone zap droplet receipt wallet banknote hand-coins
+graduation-cap shirt baby dumbbell smartphone zap droplet receipt wallet banknote coins hand-coins
 trending-up dog film music scissors stethoscope bus fuel tag shield-check file-down file-up
 circle-question-mark folder-open landmark bike hamburger cake beer pizza apple sofa wrench
 lightbulb tv gem ticket hotel map-pin palette store package trash pencil wallet-cards

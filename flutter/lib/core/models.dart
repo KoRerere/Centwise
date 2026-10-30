@@ -250,6 +250,163 @@ class Budget {
   }
 }
 
+/// How often a subscription charges.
+enum BillingCycle {
+  monthly(1),
+  quarterly(3),
+  yearly(12);
+
+  const BillingCycle(this.months);
+
+  /// Months between two charges.
+  final int months;
+
+  /// 月付 / 季付 / 年付
+  String get title => switch (this) {
+        BillingCycle.monthly => tr('月付'),
+        BillingCycle.quarterly => tr('季付'),
+        BillingCycle.yearly => tr('年付'),
+      };
+
+  static BillingCycle parse(Object? raw) {
+    for (final cycle in BillingCycle.values) {
+      if (cycle.name == raw) return cycle;
+    }
+    throw LedgerError(tr('备份中有未知的扣费周期。'));
+  }
+}
+
+/// "2026-10-27": a calendar day with no time zone, for subscription dates.
+String dayKey(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+DateTime _parseDay(Object? value) {
+  final parts = value is String ? value.split('-') : const <String>[];
+  final y = parts.length == 3 ? int.tryParse(parts[0]) : null;
+  final m = parts.length == 3 ? int.tryParse(parts[1]) : null;
+  final d = parts.length == 3 ? int.tryParse(parts[2]) : null;
+  if (y == null || m == null || d == null || m < 1 || m > 12 || d < 1 || d > 31) {
+    throw LedgerError(tr('记录含无效日期、金额或账户。'));
+  }
+  return DateTime(y, m, d);
+}
+
+/// A recurring charge (a streaming plan, cloud storage …). It is a plan, not money spent: only a
+/// confirmed charge becomes an expense entry, so the monthly average never counts as spending.
+///
+/// [nextDate] is the next charge still to be confirmed. When it has arrived the subscription shows
+/// 待确认; confirming books one expense and moves [nextDate] on by one cycle. [charged] remembers
+/// every day already booked, so one cycle can never be booked twice. A cancelled subscription keeps
+/// its history (the entries stay in the ledger) and simply has no future charges.
+class Subscription {
+  Subscription({
+    String? id,
+    required this.name,
+    required this.amount,
+    this.cycle = BillingCycle.monthly,
+    required DateTime nextDate,
+    this.categoryID,
+    this.note = '',
+    this.cancelled = false,
+    this.cancelledAt,
+    int? anchorDay,
+    List<String>? charged,
+  })  : id = id ?? newId(),
+        nextDate = DateTime(nextDate.year, nextDate.month, nextDate.day),
+        anchorDay = anchorDay ?? nextDate.day,
+        charged = charged ?? [];
+
+  String id;
+  String name;
+
+  /// Each charge, in cents (> 0).
+  int amount;
+  BillingCycle cycle;
+  DateTime nextDate;
+  String? categoryID;
+  String note;
+  bool cancelled;
+  DateTime? cancelledAt;
+
+  /// The day of the month it charges on. Kept apart from [nextDate] so a plan billed on the 31st
+  /// charges on the 30th in a 30-day month and is back on the 31st the month after.
+  int anchorDay;
+
+  /// Days ([dayKey]) already booked as expenses.
+  List<String> charged;
+
+  Subscription copy() => Subscription(
+        id: id,
+        name: name,
+        amount: amount,
+        cycle: cycle,
+        nextDate: nextDate,
+        categoryID: categoryID,
+        note: note,
+        cancelled: cancelled,
+        cancelledAt: cancelledAt,
+        anchorDay: anchorDay,
+        charged: List.of(charged),
+      );
+
+  /// [date] moved by [months], on [anchorDay] or the month's last day when it is shorter.
+  static DateTime addMonths(DateTime date, int months, int anchorDay) {
+    final first = DateTime(date.year, date.month + months, 1);
+    final last = DateTime(first.year, first.month + 1, 0).day;
+    return DateTime(first.year, first.month, anchorDay < last ? anchorDay : last);
+  }
+
+  /// The charge after [date].
+  DateTime after(DateTime date) => addMonths(date, cycle.months, anchorDay);
+
+  /// The charge date has come and it hasn't been confirmed yet.
+  bool isDue(DateTime today) => !cancelled && !nextDate.isAfter(DateTime(today.year, today.month, today.day));
+
+  /// Cost per month for the average: the monthly price, a quarter's ÷ 3, a year's ÷ 12 — in
+  /// hundredths of a cent so a sum of several plans rounds only once.
+  int get monthlyMicro => amount * 100 ~/ cycle.months;
+
+  /// Planned charge days in [start, end), from [nextDate] on (today's pending one included).
+  List<DateTime> plannedIn(DateTime start, DateTime end) {
+    final days = <DateTime>[];
+    if (cancelled) return days;
+    var day = nextDate;
+    for (var guard = 0; guard < 400 && day.isBefore(end); guard++) {
+      if (!day.isBefore(start)) days.add(day);
+      day = after(day);
+    }
+    return days;
+  }
+
+  Map<String, Object?> toJson() => {
+        'amount': amount,
+        'anchorDay': anchorDay,
+        if (cancelledAt != null) 'cancelledAt': encodeDate(cancelledAt!),
+        'cancelled': cancelled,
+        if (categoryID != null) 'categoryID': categoryID,
+        'charged': charged,
+        'cycle': cycle.name,
+        'id': id,
+        'name': name,
+        'nextDate': dayKey(nextDate),
+        'note': note,
+      };
+
+  factory Subscription.fromJson(Map<String, Object?> json) => Subscription(
+        id: _string(json['id']),
+        name: _string(json['name']),
+        amount: _int(json['amount']),
+        cycle: BillingCycle.parse(json['cycle']),
+        nextDate: _parseDay(json['nextDate']),
+        categoryID: json['categoryID'] as String?,
+        note: _string(json['note']),
+        cancelled: _bool(json['cancelled']),
+        cancelledAt: json['cancelledAt'] == null ? null : decodeDate(json['cancelledAt']),
+        anchorDay: json['anchorDay'] == null ? null : _int(json['anchorDay']),
+        charged: ((json['charged'] as List?) ?? const []).map((e) => e as String).toList(),
+      );
+}
+
 /// Original Money Pro tables kept verbatim (values as text, NULL as null). Treated as read-only.
 class LegacyArchive {
   LegacyArchive({DateTime? importedAt, required this.tables, required this.warnings})
@@ -289,18 +446,27 @@ class Ledger {
     List<LedgerCategory>? categories,
     List<Entry>? entries,
     List<Budget>? budgets,
+    List<Subscription>? subscriptions,
     this.legacy,
   })  : accounts = accounts ?? [],
         categories = categories ?? [],
         entries = entries ?? [],
-        budgets = budgets ?? [];
+        budgets = budgets ?? [],
+        subscriptions = subscriptions ?? [];
 
   int schemaVersion;
   String title;
+
+  /// Kept for old entries and backups. The app no longer shows accounts: new bills go to the first
+  /// active one (see LedgerStore.defaultAccountID), and the ledger's currency lives on them.
   List<Account> accounts;
   List<LedgerCategory> categories;
   List<Entry> entries;
   List<Budget> budgets;
+
+  /// Optional in the file: written only when there are some, so ledgers without subscriptions stay
+  /// byte-for-byte what older versions (and the SwiftUI app) read and write.
+  List<Subscription> subscriptions;
   LegacyArchive? legacy;
 
   /// Working copy for an edit. The legacy archive is shared because it is never modified.
@@ -311,6 +477,7 @@ class Ledger {
         categories: categories.map((c) => c.copy()).toList(),
         entries: entries.map((e) => e.copy()).toList(),
         budgets: budgets.map((b) => b.copy()).toList(),
+        subscriptions: subscriptions.map((s) => s.copy()).toList(),
         legacy: legacy,
       );
 
@@ -321,6 +488,7 @@ class Ledger {
         'entries': entries.map((e) => e.toJson()).toList(),
         if (legacy != null) 'legacy': legacy!.toJson(),
         'schemaVersion': schemaVersion,
+        if (subscriptions.isNotEmpty) 'subscriptions': subscriptions.map((s) => s.toJson()).toList(),
         'title': title,
       };
 
@@ -334,6 +502,7 @@ class Ledger {
       categories: list('categories').map(LedgerCategory.fromJson).toList(),
       entries: list('entries').map(Entry.fromJson).toList(),
       budgets: list('budgets').map(Budget.fromJson).toList(),
+      subscriptions: list('subscriptions').map(Subscription.fromJson).toList(),
       legacy: json['legacy'] == null ? null : LegacyArchive.fromJson((json['legacy'] as Map).cast<String, Object?>()),
     );
   }
@@ -395,6 +564,13 @@ class Ledger {
           allocations: [Allocation(categoryID: 'transport', amount: 600)],
           note: tr('地铁')),
     ];
+    final day = DateTime(today.year, today.month, today.day);
+    ledger.subscriptions = [
+      Subscription(name: tr('视频会员'), amount: 2500, nextDate: DateTime(day.year, day.month, day.day + 5), categoryID: 'fun'),
+      Subscription(name: tr('音乐会员'), amount: 1500, nextDate: day, categoryID: 'fun'),
+      Subscription(name: tr('云存储'), amount: 6800, cycle: BillingCycle.quarterly, nextDate: DateTime(day.year, day.month, day.day + 12), categoryID: 'home'),
+      Subscription(name: tr('域名续费'), amount: 6900, cycle: BillingCycle.yearly, nextDate: DateTime(day.year, day.month + 4, 1), categoryID: 'other'),
+    ];
     return ledger;
   }
 
@@ -405,7 +581,8 @@ class Ledger {
         entries.length > 100000 ||
         accounts.length > 500 ||
         categories.length > 5000 ||
-        budgets.length > 500) {
+        budgets.length > 500 ||
+        subscriptions.length > 500) {
       throw LedgerError(tr('账本名称或记录数量超出范围。'));
     }
     void unique(Iterable<String> ids, String label) {
@@ -424,8 +601,12 @@ class Ledger {
     bool inRange(int value) => value >= -Money.maximum && value <= Money.maximum;
     for (final account in accounts) {
       if (!isSupportedCurrency(account.currency) || account.name.isEmpty || account.name.length > 200 || !inRange(account.openingBalance)) {
-        throw LedgerError(tr('第一版只支持人民币；请检查账户名称和期初余额。'));
+        throw LedgerError(tr('请检查账户币种、名称和期初余额。'));
       }
+    }
+    // The ledger keeps one currency: accounts may not mix codes even when each is supported.
+    if (accounts.map((a) => a.currency).toSet().length > 1) {
+      throw LedgerError(tr('一本账的账户只能使用同一种币种。'));
     }
     final categoryKinds = {for (final c in categories) c.id: c.kind};
     for (final category in categories) {
@@ -486,6 +667,49 @@ class Ledger {
         throw LedgerError(tr('同一范围只能有一个每月预算，同一个月也只能有一个本月预算，金额需大于零。'));
       }
     }
+    unique(subscriptions.map((s) => s.id), tr('订阅'));
+    for (final s in subscriptions) {
+      // A category that was deleted later is not an error: charges then go to 其他.
+      if (s.name.trim().isEmpty ||
+          s.name.length > 200 ||
+          s.note.length > 10000 ||
+          s.amount <= 0 ||
+          s.amount > Money.maximum ||
+          s.anchorDay < 1 ||
+          s.anchorDay > 31 ||
+          s.charged.length > 5000) {
+        throw LedgerError(tr('订阅需要名称和大于零的金额。'));
+      }
+    }
+  }
+
+  // MARK: Subscriptions
+
+  /// Subscriptions still running (not cancelled).
+  List<Subscription> get activeSubscriptions => [for (final s in subscriptions) if (!s.cancelled) s];
+
+  /// 月均固定费用: monthly plans as they are, quarterly ÷ 3, yearly ÷ 12, summed then rounded to the
+  /// cent. A figure to plan with only — it is never booked as spending.
+  int get subscriptionMonthlyAverage {
+    final micro = activeSubscriptions.fold<int>(0, (sum, s) => sum + s.monthlyMicro);
+    return (micro / 100).round();
+  }
+
+  /// 本月预计扣费: every charge of a running subscription whose actual charge day falls in [month] —
+  /// the ones already confirmed this month plus the ones still to come (or waiting to be confirmed).
+  int subscriptionChargesIn(DateTime month) {
+    final start = DateTime(month.year, month.month, 1);
+    final end = DateTime(month.year, month.month + 1, 1);
+    var total = 0;
+    for (final s in activeSubscriptions) {
+      final days = <String>{
+        for (final key in s.charged)
+          if (key.compareTo(dayKey(start)) >= 0 && key.compareTo(dayKey(end)) < 0) key,
+        for (final day in s.plannedIn(start, end)) dayKey(day),
+      };
+      total += days.length * s.amount;
+    }
+    return total;
   }
 
   int balance(String accountID) {

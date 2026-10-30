@@ -1,10 +1,70 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../core/models.dart';
 import 'lucide_icons.dart';
 
-/// A Lucide icon (https://lucide.dev) drawn from the bundled SVG data in lucide_icons.dart.
+/// Interface icons drawn as Apple's SF Symbols-style glyphs (the cupertino_icons font) so the app reads
+/// as iOS. Names stay the Lucide names used across the code; anything not listed here still falls back
+/// to the bundled Lucide SVG. Category pictures are separate (3D emoji, see [CategoryIcon]).
+const Map<String, IconData> sfIcons = {
+  // 'search' deliberately falls back to the Lucide line icon: the SF glyph is much heavier than
+  // the other Lucide strokes around the app (header buttons, search fields).
+  'folder-search': CupertinoIcons.search,
+  'plus': CupertinoIcons.add,
+  'chevron-left': CupertinoIcons.chevron_left,
+  'chevron-right': CupertinoIcons.chevron_right,
+  'chevron-down': CupertinoIcons.chevron_down,
+  'chevron-up-down': CupertinoIcons.chevron_up_chevron_down,
+  'x': CupertinoIcons.xmark,
+  'check': CupertinoIcons.checkmark_alt,
+  'circle-x': CupertinoIcons.xmark_circle_fill,
+  'circle-alert': CupertinoIcons.exclamationmark_circle,
+  'info': CupertinoIcons.info,
+  'trash': CupertinoIcons.trash,
+  'pencil': CupertinoIcons.pencil,
+  'calendar': CupertinoIcons.calendar,
+  'text-align-start': CupertinoIcons.text_alignleft,
+  'list-filter': CupertinoIcons.line_horizontal_3_decrease,
+  'lock': CupertinoIcons.lock,
+  'delete': CupertinoIcons.delete_left,
+  'undo-2': CupertinoIcons.arrow_uturn_left,
+  'refresh-cw': CupertinoIcons.arrow_2_circlepath,
+  'arrow-left-right': CupertinoIcons.arrow_right_arrow_left,
+  'arrow-up-right': CupertinoIcons.arrow_up_right,
+  'arrow-down-left': CupertinoIcons.arrow_down_left,
+  'equal': CupertinoIcons.equal,
+  'split': CupertinoIcons.arrow_branch,
+  'chart-pie': CupertinoIcons.chart_pie,
+  'piggy-bank': CupertinoIcons.chart_pie,
+  'receipt': CupertinoIcons.doc_text,
+  'book-open': CupertinoIcons.book,
+  'layout-grid': CupertinoIcons.square_grid_2x2,
+  'upload': CupertinoIcons.square_arrow_up,
+  'download': CupertinoIcons.square_arrow_down,
+  'file-down': CupertinoIcons.square_arrow_down,
+  'cloud': CupertinoIcons.cloud,
+  'cloud-check': CupertinoIcons.cloud,
+  'log-out': CupertinoIcons.square_arrow_right,
+  'circle-user-round': CupertinoIcons.person_crop_circle,
+  'user': CupertinoIcons.person,
+  'users': CupertinoIcons.person_2,
+  'sun-moon': CupertinoIcons.circle_lefthalf_fill,
+  'languages': CupertinoIcons.globe,
+  'shield-check': CupertinoIcons.checkmark_shield,
+  'credit-card': CupertinoIcons.creditcard,
+  'wallet': CupertinoIcons.creditcard,
+  'wallet-cards': CupertinoIcons.creditcard,
+  'banknote': CupertinoIcons.money_yen_circle,
+  'tag': CupertinoIcons.tag,
+  'archive': CupertinoIcons.archivebox,
+  'ellipsis': CupertinoIcons.ellipsis,
+  'store': CupertinoIcons.bag,
+};
+
+/// An interface icon: the SF-style glyph from [sfIcons] when there is one, otherwise the Lucide icon
+/// (https://lucide.dev) drawn from the bundled SVG data in lucide_icons.dart.
 class LIcon extends StatelessWidget {
   const LIcon(this.name, {super.key, this.size = 18, this.color, this.strokeWidth = 2, this.semanticLabel});
 
@@ -28,6 +88,15 @@ class LIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolved = color ?? IconTheme.of(context).color ?? DefaultTextStyle.of(context).style.color ?? Colors.black;
+    final glyph = sfIcons[name];
+    if (glyph != null) {
+      // SF glyphs fill more of their box than Lucide's 24-unit grid; a heavier stroke asks for a bolder
+      // glyph (e.g. chevrons drawn at 2.5), which the font gives through its weight.
+      final icon = Icon(glyph, size: size * 1.05, color: resolved, weight: strokeWidth >= 2.5 ? 600 : 400);
+      final sized = SizedBox(width: size, height: size, child: OverflowBox(maxWidth: size * 1.2, maxHeight: size * 1.2, child: icon));
+      if (semanticLabel == null) return ExcludeSemantics(child: sized);
+      return Semantics(label: semanticLabel, child: sized);
+    }
     final picture = SvgPicture.string(
       _svg(name, strokeWidth),
       width: size,
@@ -101,62 +170,47 @@ class CategoryIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final name = categoryIcon(category);
     if (!useEmojiCategoryIcons) return LIcon(name, size: size, color: color);
-    // Fluent Emoji 3D artwork (bundled PNGs), so emoji look the same on iPhone and Mac. The art has
-    // little padding, so it is drawn slightly larger than the line icons it replaces.
-    return Emoji3DIcon(name, size: size);
+    return EmojiIcon(name, size: size);
   }
 }
 
-/// The Fluent Emoji 3D picture for a category icon key (a Lucide name, see [categoryEmoji3D]).
-class Emoji3DIcon extends StatelessWidget {
-  const Emoji3DIcon(this.name, {super.key, this.size = 18});
+/// A category emoji, drawn with Apple's own emoji (Apple Color Emoji, the system font, native on iPhone
+/// and Mac — the Trackly 得意記 look), centred in a square box. [name] is a category icon key (a Lucide
+/// name) looked up in [categoryEmoji].
+class EmojiIcon extends StatelessWidget {
+  const EmojiIcon(this.name, {super.key, this.size = 18});
   final String name;
   final double size;
 
   @override
   Widget build(BuildContext context) {
-    final file = categoryEmoji3D[name] ?? 'label';
-    // The art has little padding, so it is drawn slightly larger than the line icons it replaces.
+    final box = size * 1.15;
     return ExcludeSemantics(
-      child: Image.asset('assets/emoji3d/$file.png',
-          width: size * 1.15, height: size * 1.15, filterQuality: FilterQuality.medium, gaplessPlayback: true),
+      child: SizedBox(
+        width: box,
+        height: box,
+        child: Center(
+          child: Text(
+            categoryEmoji[name] ?? (isEmojiSymbol(name) ? name : '🏷️'),
+            textScaler: TextScaler.noScaling,
+            style: TextStyle(fontSize: size * 0.98, height: 1.0, fontFamilyFallback: const ['Apple Color Emoji']),
+          ),
+        ),
+      ),
     );
   }
 }
 
-/// Fluent Emoji 3D file (`assets/emoji3d/NAME.png`, Microsoft, MIT licence) for each Lucide category
-/// icon. Same choices as the earlier system-emoji set.
-const Map<String, String> categoryEmoji3D = {
-  'utensils': 'fork_and_knife_with_plate', 'coffee': 'hot_beverage', 'apple': 'red_apple', 'beer': 'beer_mug',
-  'cake': 'birthday_cake', 'pizza': 'pizza', 'hamburger': 'hamburger', 'train-front': 'metro', 'bus': 'bus',
-  'car': 'automobile', 'bike': 'bicycle', 'fuel': 'fuel_pump', 'square-parking': 'p_button',
-  'plane': 'airplane', 'hotel': 'hotel', 'map-pin': 'round_pushpin', 'ticket': 'admission_tickets',
-  'shopping-bag': 'shopping_bags', 'shopping-basket': 'basket', 'shirt': 't-shirt',
-  'footprints': 'running_shoe', 'gem': 'gem_stone', 'package': 'package', 'store': 'convenience_store',
-  'house': 'house', 'sofa': 'couch_and_lamp', 'bath': 'bathtub', 'wrench': 'wrench', 'trash': 'wastebasket',
-  'lightbulb': 'light_bulb', 'zap': 'high_voltage', 'droplet': 'droplet', 'flame': 'fire',
-  'wifi': 'antenna_bars', 'phone': 'telephone', 'smartphone': 'mobile_phone', 'laptop': 'laptop',
-  'tv': 'television', 'app-window': 'mobile_phone_with_arrow', 'pill': 'pill', 'stethoscope': 'stethoscope',
-  'heart': 'red_heart', 'dumbbell': 'person_lifting_weights', 'scissors': 'scissors', 'sparkles': 'sparkles',
-  'gamepad-2': 'video_game', 'film': 'clapper_board', 'music': 'musical_note', 'mic': 'studio_microphone',
-  'palette': 'artist_palette', 'book-open': 'books', 'graduation-cap': 'graduation_cap', 'baby': 'baby_bottle',
-  'dog': 'dog_face', 'fish': 'fish', 'users': 'busts_in_silhouette', 'user': 'slightly_smiling_face',
-  'gift': 'wrapped_gift', 'receipt': 'receipt', 'shield-check': 'shield', 'landmark': 'classical_building',
-  'wallet': 'purse', 'wallet-cards': 'credit_card', 'credit-card': 'credit_card', 'briefcase': 'briefcase',
-  'trending-up': 'chart_increasing', 'hand-coins': 'money_bag', 'banknote': 'dollar_banknote',
-  'piggy-bank': 'pig_face', 'ellipsis': 'pushpin', 'layout-grid': 'card_index_dividers',
-  'folder-search': 'card_index_dividers', 'tag': 'label',
-};
-
-/// Emoji for each Lucide category icon.
+/// Apple emoji for each Lucide category icon. Only emoji that draw in colour by default: symbols from
+/// the older text range (✈ ☎ ✂ ❤ 🅿) can render as black glyphs, so emoji-only stand-ins are used.
 const Map<String, String> categoryEmoji = {
   'utensils': '🍽️', 'coffee': '☕', 'apple': '🍎', 'beer': '🍺', 'cake': '🎂', 'pizza': '🍕', 'hamburger': '🍔',
-  'train-front': '🚇', 'bus': '🚌', 'car': '🚗', 'bike': '🚲', 'fuel': '⛽', 'square-parking': '🅿️', 'plane': '✈️',
+  'train-front': '🚇', 'bus': '🚌', 'car': '🚗', 'bike': '🚲', 'fuel': '⛽', 'square-parking': '🚙', 'plane': '🛫',
   'hotel': '🏨', 'map-pin': '📍', 'ticket': '🎟️',
   'shopping-bag': '🛍️', 'shopping-basket': '🧺', 'shirt': '👕', 'footprints': '👟', 'gem': '💎', 'package': '📦', 'store': '🏪',
   'house': '🏠', 'sofa': '🛋️', 'bath': '🛁', 'wrench': '🔧', 'trash': '🗑️', 'lightbulb': '💡',
-  'zap': '⚡', 'droplet': '💧', 'flame': '🔥', 'wifi': '📶', 'phone': '☎️', 'smartphone': '📱', 'laptop': '💻', 'tv': '📺', 'app-window': '📲',
-  'pill': '💊', 'stethoscope': '🩺', 'heart': '❤️', 'dumbbell': '🏋️', 'scissors': '✂️', 'sparkles': '✨',
+  'zap': '⚡', 'droplet': '💧', 'flame': '🔥', 'wifi': '📶', 'phone': '📞', 'smartphone': '📱', 'laptop': '💻', 'tv': '📺', 'app-window': '📲',
+  'pill': '💊', 'stethoscope': '🩺', 'heart': '💗', 'dumbbell': '🏋️', 'scissors': '💈', 'sparkles': '✨',
   'gamepad-2': '🎮', 'film': '🎬', 'music': '🎵', 'mic': '🎙️', 'palette': '🎨', 'book-open': '📚', 'graduation-cap': '🎓',
   'baby': '🍼', 'dog': '🐶', 'fish': '🐟', 'users': '👥', 'user': '🙂', 'gift': '🎁',
   'receipt': '🧾', 'shield-check': '🛡️', 'landmark': '🏛️', 'wallet': '👛', 'wallet-cards': '💳', 'credit-card': '💳',
@@ -169,6 +223,8 @@ const Map<String, String> categoryEmoji = {
 /// falling back to keywords in the category name.
 String categoryIcon(LedgerCategory category) {
   final symbol = category.symbol;
+  // Any emoji chosen in the full emoji picker is stored as the emoji itself.
+  if (isEmojiSymbol(symbol)) return symbol;
   if (lucideSvgs.containsKey(symbol) && symbol != 'layout-grid') return symbol;
   final mapped = _sfSymbols[symbol];
   if (mapped != null && mapped != 'layout-grid') return mapped;
@@ -289,12 +345,27 @@ const List<(List<String>, String)> _nameRules = [
   (['other'], 'ellipsis'),
 ];
 
-/// Icons offered when creating a category.
-/// Icons offered when creating or editing a category: one per distinct 3D picture.
+/// True when a category symbol is an emoji itself (picked from the full emoji set) rather than a
+/// Lucide / SF Symbol name, which are plain ASCII.
+bool isEmojiSymbol(String symbol) => symbol.isNotEmpty && symbol.runes.first > 0x7F;
+
+/// The emoji a category icon key draws as (a Lucide key's mapped emoji, or the emoji itself).
+String emojiFor(String icon) => categoryEmoji[icon] ?? (isEmojiSymbol(icon) ? icon : '🏷️');
+
+/// The icon key to store for an emoji: the Lucide key when the emoji is one of the curated ones (so
+/// existing data and the Lucide fallback keep working), otherwise the emoji itself.
+String iconKeyForEmoji(String emoji) {
+  for (final e in categoryEmoji.entries) {
+    if (e.value == emoji) return e.key;
+  }
+  return emoji;
+}
+
+/// Icons offered when creating or editing a category: one per distinct emoji.
 final List<String> categoryIconChoices = () {
   final seen = <String>{};
   return [
-    for (final e in categoryEmoji3D.entries)
+    for (final e in categoryEmoji.entries)
       if (seen.add(e.value)) e.key
   ];
 }();

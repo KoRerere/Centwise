@@ -30,41 +30,13 @@ class AccountsPage extends StatelessWidget {
       CwCard(
         padding: const EdgeInsets.all(22),
         child: Column(children: [
-          Text(tr('账面总余额'), style: cw(13, color: p.muted)),
+          Text(tr('账面总余额'), style: cw(IOSText.footnote, color: p.muted)),
           const SizedBox(height: 6),
           AmountText(total, size: 34, weight: FontWeight.w700, color: p.ink),
           const SizedBox(height: 6),
-          Text(tr('期初余额 + 已入账记录；转账不增加总余额。'), style: cw(12, color: p.muted)),
+          Text(tr('期初余额 + 已入账记录；转账不增加总余额。'), style: cw(IOSText.footnote, color: p.muted)),
         ]),
       ),
-      // Imported ledgers haven't been reconciled: say what to do and take the user straight there.
-      if (ledger.legacy != null && ledger.accounts.isNotEmpty)
-        CwCard(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              LIcon('circle-alert', size: 16, color: p.warning),
-              const SizedBox(width: 6),
-              Expanded(child: Text(tr('导入的余额还没有核对'), style: cw(15, weight: FontWeight.w600, color: p.ink))),
-              Pressable(
-                onTap: () => showCwSheet<void>(
-                  context,
-                  (_) => StoreScope(
-                    store: store,
-                    child: AccountEditor(account: ledger.accounts.firstWhere((a) => !a.archived, orElse: () => ledger.accounts.first), reconcile: true),
-                  ),
-                ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text(tr('去核对'), style: cw(14, weight: FontWeight.w600, color: p.accent)),
-                  LIcon('chevron-right', size: 14, color: p.accent, strokeWidth: 2.5),
-                ]),
-              ),
-            ]),
-            const SizedBox(height: 6),
-            Text(tr('对照银行或 App 里的实际余额：填「实际余额」会生成一笔调整记录，只改当前余额；改「期初余额」会影响所有时期的余额。'),
-                style: cw(12, color: p.muted, height: 1.45)),
-          ]),
-        ),
       Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         CardCaption(tr('我的账户'), trailing: '${currencyFor(ledger.currency).name} ${ledger.currency}'),
         const SizedBox(height: 10),
@@ -73,11 +45,11 @@ class AccountsPage extends StatelessWidget {
           child: ledger.accounts.isEmpty
               ? Padding(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Text(tr('还没有账户'), textAlign: TextAlign.center, style: cw(14, color: p.muted)),
+                  child: Text(tr('还没有账户'), textAlign: TextAlign.center, style: cw(IOSText.subheadline, color: p.muted)),
                 )
               : Column(children: [
                   for (var i = 0; i < ledger.accounts.length; i++) ...[
-                    if (i > 0) Padding(padding: const EdgeInsets.only(left: 52), child: Divider(height: 1, color: p.track)),
+                    if (i > 0) Padding(padding: const EdgeInsets.only(left: 52), child: Divider(height: 0.5, thickness: 0.5, color: p.cardStroke)),
                     _row(context, ledger.accounts[i]),
                   ]
                 ]),
@@ -105,12 +77,12 @@ class AccountsPage extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(account.name, style: cw(16, weight: FontWeight.w600, color: p.ink), maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(account.name, style: cw(IOSText.body, weight: FontWeight.w600, color: p.ink), maxLines: 1, overflow: TextOverflow.ellipsis),
               const SizedBox(height: 3),
-              Text(account.archived ? tr('已归档 · 保留历史记录') : tr('本地账户'), style: cw(12, color: p.muted)),
+              Text(account.archived ? tr('已归档 · 保留历史记录') : tr('本地账户'), style: cw(IOSText.footnote, color: p.muted)),
             ]),
           ),
-          AmountText(store.ledger.balance(account.id), size: 16, weight: FontWeight.w600, color: p.ink),
+          AmountText(store.ledger.balance(account.id), size: IOSText.body, weight: FontWeight.w500, color: p.ink),
           const SizedBox(width: 4),
           LIcon('chevron-right', size: 16, color: p.muted.withValues(alpha: 0.6)),
         ]),
@@ -212,7 +184,7 @@ class _AccountEditorState extends State<AccountEditor> {
       title: account == null ? tr('新账户') : tr('管理账户'),
       trailingLabel: tr('保存'),
       onTrailing: _save,
-      body: ListView(padding: const EdgeInsets.all(18), children: [
+      body: ListView(clipBehavior: Clip.none, padding: const EdgeInsets.all(18), children: [
         FormSection(
           title: tr('账户资料'),
           footer: tr('期初余额是记账开始前的余额，不是当前余额。修改会影响所有时期的账面余额。归档不会删除任何记录。'),
@@ -227,11 +199,11 @@ class _AccountEditorState extends State<AccountEditor> {
               keyboardType: numberKeyboard,
               inputFormatters: [MoneyInputFormatter(signed: true)],
             ),
-            FormRow(icon: 'banknote', label: tr('币种'), trailing: CurrencyLabel(StoreScope.of(context).ledger.currency)),
+            FormRow(icon: 'coins', label: tr('币种'), trailing: CurrencyLabel(StoreScope.of(context).ledger.currency)),
             FormRow(
               icon: 'archive',
               label: tr('归档账户'),
-              trailing: Switch.adaptive(value: _archived, onChanged: (v) => setState(() => _archived = v)),
+              trailing: IOSSwitch(value: _archived, onChanged: (v) => setState(() => _archived = v)),
             ),
           ],
         ),

@@ -7,8 +7,10 @@ import '../../core/currency.dart';
 import '../../core/models.dart';
 import '../../core/repository.dart';
 import '../components.dart';
+import '../emoji_picker.dart';
 import '../icons.dart';
 import '../motion.dart';
+import '../entry_editor.dart' show CategoryChooser, CategoryGrid, CategoryGridTile;
 import '../sheets.dart';
 import '../store.dart';
 import '../theme.dart';
@@ -24,14 +26,6 @@ class SettingsSheet extends StatefulWidget {
 }
 
 class _SettingsSheetState extends State<SettingsSheet> {
-  late final TextEditingController _title = TextEditingController(text: StoreScope.read(context).ledger.title);
-
-  @override
-  void dispose() {
-    _title.dispose();
-    super.dispose();
-  }
-
   Future<void> _export() async {
     final store = StoreScope.read(context);
     final now = DateTime.now();
@@ -58,8 +52,8 @@ class _SettingsSheetState extends State<SettingsSheet> {
 
   static String _themeLabel(ThemeMode mode) => switch (mode) {
         ThemeMode.system => tr('自动'),
-        ThemeMode.dark => tr('始终开启'),
-        ThemeMode.light => tr('始终关闭'),
+        ThemeMode.dark => tr('深色'),
+        ThemeMode.light => tr('浅色'),
       };
 
   static String _languageLabel(LanguagePref pref) => switch (pref) {
@@ -70,10 +64,11 @@ class _SettingsSheetState extends State<SettingsSheet> {
       };
 
   Future<void> _pickTheme(LedgerStore store) async {
-    final picked = await _pickOption<ThemeMode>(tr('深色模式'), store.themeMode, [
+    final picked = await _pickOption<ThemeMode>(tr('外观'), store.themeMode, [
       (ThemeMode.system, tr('自动（跟随系统）')),
-      (ThemeMode.dark, tr('始终开启')),
-      (ThemeMode.light, tr('始终关闭')),
+      // iOS 显示与亮度 wording and order: 浅色, then 深色.
+      (ThemeMode.light, tr('浅色')),
+      (ThemeMode.dark, tr('深色')),
     ]);
     if (picked != null) store.setThemeMode(picked);
   }
@@ -100,7 +95,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Container(width: 38, height: 5, decoration: BoxDecoration(color: p.track, borderRadius: BorderRadius.circular(9))),
             const SizedBox(height: 16),
-            Text(caption, style: cw(13, color: p.muted)),
+            Text(caption, style: cw(IOSText.footnote, color: p.muted)),
             const SizedBox(height: 8),
             for (final (value, title) in options)
               Pressable(
@@ -110,7 +105,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
                   width: double.infinity,
                   child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                     Text(title,
-                        style: cw(17,
+                        style: cw(IOSText.headline,
                             weight: value == current ? FontWeight.w700 : FontWeight.w400,
                             color: value == current ? p.accent : p.ink)),
                     if (value == current) ...[const SizedBox(width: 6), LIcon('check', size: 18, color: p.accent, strokeWidth: 2.5)],
@@ -139,43 +134,29 @@ class _SettingsSheetState extends State<SettingsSheet> {
     final p = Palette.of(context);
     return SheetScaffold(
       title: tr('设置与备份'),
-      leadingLabel: tr('完成'),
-      body: ListView(padding: const EdgeInsets.fromLTRB(18, 8, 18, 32), children: [
-        FormSection(title: tr('我的账本'), children: [
-          Row(children: [
-            LIcon('book-open', size: 17, color: p.muted),
-            const SizedBox(width: 10),
-            Expanded(child: FormTextField(controller: _title, hint: tr('账本名称'))),
-          ]),
-          FormRow(
-            icon: 'check',
-            label: tr('保存名称'),
-            onTap: () => store.commit((ledger) => ledger.title = _title.text.trim()),
-          ),
-          FormRow(icon: 'receipt', label: tr('记录'), trailing: Text(tr('{n} 笔', {'n': store.ledger.entries.length}), style: cw(15, color: p.muted))),
-          FormRow(icon: 'banknote', label: tr('货币'), chevron: true, trailing: CurrencyLabel(store.ledger.currency), onTap: _pickCurrency),
+      largeTitle: true,
+      closeButton: false,
+      body: ListView(clipBehavior: Clip.none, padding: const EdgeInsets.fromLTRB(16, SheetLargeTitle.topPadding, 16, 32), children: [
+        SheetLargeTitle(tr('设置与备份')),
+        FormSection(children: [
+          FormRow(icon: 'receipt', label: tr('记录'), trailing: Text(tr('{n} 笔', {'n': store.ledger.entries.length}), style: cw(IOSText.body, color: p.muted))),
+          FormRow(icon: 'coins', label: tr('货币'), chevron: true, trailing: CurrencyLabel(store.ledger.currency), onTap: _pickCurrency),
         ]),
-        const SizedBox(height: 22),
+        const SizedBox(height: 28),
         // One place for 备份与恢复: where the data lives, the two actions, and the details on request.
         FormSection(
-          title: tr('备份与恢复'),
-          footer: tr('换设备前先导出备份，在新设备导入即可恢复。删除 App 会删除本机数据，请定期导出。'),
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: Row(children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(color: p.track, shape: BoxShape.circle),
-                  child: Center(child: LIcon('cloud-off', size: 20, color: p.muted)),
-                ),
-                const SizedBox(width: 12),
+                // Same tile and text column as the rows below, so the status lines up with them.
+                const FormIconTile('cloud-off'),
+                const SizedBox(width: FormRow.textInset - FormIconTile.size),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(tr('账本保存在本机'), style: cw(16, weight: FontWeight.w600, color: p.ink)),
+                    Text(tr('账本保存在本机'), style: cw(IOSText.body, weight: FontWeight.w600, color: p.ink)),
                     const SizedBox(height: 2),
-                    Text(tr('iCloud 同步暂未开放'), style: cw(13, color: p.muted)),
+                    Text(tr('iCloud 同步暂未开放'), style: cw(IOSText.footnote, color: p.muted)),
                   ]),
                 ),
               ]),
@@ -195,36 +176,29 @@ class _SettingsSheetState extends State<SettingsSheet> {
             ),
           ],
         ),
-        const SizedBox(height: 22),
-        FormSection(title: tr('分类管理'), children: [
+        const SizedBox(height: 28),
+        // 通用: related rows share one card the way iOS Settings groups them, instead of one
+        // skinny card each.
+        FormSection(children: [
           FormRow(icon: 'layout-grid', label: tr('编辑分类'), chevron: true, onTap: _openCategories),
-        ]),
-        const SizedBox(height: 22),
-        FormSection(title: tr('外观'), children: [
           FormRow(
             icon: 'sun-moon',
-            label: tr('深色模式'),
+            label: tr('外观'),
             chevron: true,
-            trailing: Text(_themeLabel(store.themeMode), style: cw(15, color: p.muted)),
+            trailing: Text(_themeLabel(store.themeMode), style: cw(IOSText.body, color: p.muted)),
             onTap: () => _pickTheme(store),
           ),
-        ]),
-        const SizedBox(height: 22),
-        FormSection(title: tr('语言'), children: [
           FormRow(
             icon: 'languages',
             label: tr('应用语言'),
             chevron: true,
-            trailing: Text(_languageLabel(store.languagePref), style: cw(15, color: p.muted)),
+            trailing: Text(_languageLabel(store.languagePref), style: cw(IOSText.body, color: p.muted)),
             onTap: () => _pickLanguage(store),
           ),
-        ]),
-        const SizedBox(height: 22),
-        FormSection(title: tr('关于 Centwise'), children: [
-          FormRow(icon: 'info', label: tr('版本'), trailing: Text(appVersion, style: cw(15, color: p.muted))),
           FormRow(
             icon: 'refresh-cw',
             label: tr('检查更新'),
+            trailing: Text(tr('当前版本：{version}', {'version': appVersion}), style: cw(IOSText.body, color: p.muted)),
             onTap: () => showCwAlert(
               context,
               tr('检查更新'),
@@ -237,58 +211,141 @@ class _SettingsSheetState extends State<SettingsSheet> {
   }
 }
 
-/// Category list with "添加分类".
-/// 设置 → 分类: every category, subcategories under their parent. Tap one to rename it, change its
-/// icon or move it under another category.
-class CategoriesSheet extends StatelessWidget {
+/// 设置 → 编辑分类: each kind's top-level categories as a grid (the 选择分类 layout). Tap one
+/// without subcategories to edit it; one with subcategories (count badge) opens its own page —
+/// edit the parent there, see its subcategories as a grid, and add one.
+class CategoriesSheet extends StatefulWidget {
   const CategoriesSheet({super.key});
+
+  @override
+  State<CategoriesSheet> createState() => _CategoriesSheetState();
+}
+
+class _CategoriesSheetState extends State<CategoriesSheet> {
+  /// The top-level category whose page is showing; null = the overview.
+  String? _parentID;
+
+  /// +1 going into a parent, −1 coming back: which way the content slides.
+  int _direction = 1;
+
+  void _open(String id) => setState(() {
+        _direction = 1;
+        _parentID = id;
+      });
+
+  void _back() => setState(() {
+        _direction = -1;
+        _parentID = null;
+      });
 
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
     final p = Palette.of(context);
     final ledger = store.ledger;
-    void edit(LedgerCategory? category) =>
-        showCwSheet<void>(context, (_) => StoreScope(store: store, child: CategoryEditor(editing: category)));
-    Widget row(LedgerCategory category, {bool child = false}) => Pressable(
-          onTap: () => edit(category),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 50),
-            child: Row(children: [
-              if (child) const SizedBox(width: 26),
-              CategoryIcon(category, size: child ? 16 : 18, color: categoryTint(category.id)),
-              const SizedBox(width: 10),
-              Expanded(child: Text(category.name, style: cw(child ? 14 : 15, color: p.ink))),
-              LIcon('chevron-right', size: 16, color: p.muted.withValues(alpha: 0.7)),
-            ]),
-          ),
+    void edit(LedgerCategory? category, {EntryKind? kind, String? parentID}) => showCwSheet<void>(
+          context,
+          (_) => StoreScope(store: store, child: CategoryEditor(editing: category, initialKind: kind, initialParentID: parentID)),
         );
-    return SheetScaffold(
-      title: tr('分类'),
-      leadingLabel: tr('完成'),
-      trailingLabel: tr('添加'),
-      onTrailing: () => edit(null),
-      body: ListView(padding: const EdgeInsets.fromLTRB(18, 8, 18, 32), children: [
+    // The parent may have been deleted or moved while its page was open.
+    final parent = _parentID == null ? null : ledger.categoryByID(_parentID!);
+    if (_parentID != null && (parent == null || parent.parentID != null)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _back();
+      });
+    }
+
+    Widget caption(String text) => Padding(
+          padding: const EdgeInsets.only(left: 16, bottom: 10),
+          child: Text(text, style: cw(IOSText.footnote, color: p.muted)),
+        );
+    Widget addTile(VoidCallback onTap, String label) => CategoryGridTile(
+          name: label,
+          icon: LIcon('plus', size: 22, color: p.ink),
+          onTap: onTap,
+        );
+    Widget tile(LedgerCategory c, {bool drill = true}) {
+      final children = ledger.childrenOf(c.id).length;
+      return CategoryGridTile(
+        name: c.name,
+        icon: CategoryIcon(c, size: 24, color: categoryTint(c.id)),
+        badge: drill && children > 0 ? '$children' : null,
+        onTap: drill && children > 0 ? () => _open(c.id) : () => edit(c),
+      );
+    }
+
+    final Widget content;
+    if (parent == null) {
+      content = ListView(key: const ValueKey('overview'), clipBehavior: Clip.none, padding: const EdgeInsets.fromLTRB(16, 8, 16, 32), children: [
         for (final kind in const [EntryKind.expense, EntryKind.income]) ...[
-          FormSection(title: kind.title, children: [
+          caption(kind.title),
+          CategoryGrid(children: [
             for (final top in ledger.categories.where((c) =>
-                c.kind == kind && (c.parentID == null || ledger.categoryByID(c.parentID!) == null))) ...[
-              row(top),
-              for (final sub in ledger.childrenOf(top.id)) row(sub, child: true),
-            ],
+                c.kind == kind && (c.parentID == null || ledger.categoryByID(c.parentID!) == null)))
+              tile(top),
+            addTile(() => edit(null, kind: kind), tr('添加')),
           ]),
           const SizedBox(height: 22),
         ],
-        Text(tr('点分类可以改名、换图标或调整上级分类；改名不影响已有账单。'), style: cw(12, color: p.muted)),
-      ]),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(tr('点分类可以改名、换图标或调整上级分类；带数字的分类有子分类，点开查看。改名不影响已有账单。'),
+              style: cw(IOSText.footnote, color: p.muted, height: 1.35)),
+        ),
+      ]);
+    } else {
+      final subs = ledger.childrenOf(parent.id);
+      content = ListView(key: ValueKey('parent-${parent.id}'), clipBehavior: Clip.none, padding: const EdgeInsets.fromLTRB(16, 8, 16, 32), children: [
+        FormSection(children: [
+          Pressable(
+            onTap: () => edit(parent),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: FormRow.minHeight),
+              child: Row(children: [
+                CategoryIcon(parent, size: 24, color: categoryTint(parent.id)),
+                const SizedBox(width: 12),
+                Expanded(child: Text(tr('编辑「{name}」', {'name': parent.name}), style: cw(IOSText.body, color: p.ink))),
+                LIcon('chevron-right', size: 14, color: p.muted.withValues(alpha: 0.6)),
+              ]),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 22),
+        caption(tr('子分类')),
+        CategoryGrid(children: [
+          for (final c in subs) tile(c, drill: false),
+          addTile(() => edit(null, kind: parent.kind, parentID: parent.id), tr('添加')),
+        ]),
+      ]);
+    }
+
+    return PopScope(
+      // Inside a parent, the back gesture / Esc returns to the overview first.
+      canPop: _parentID == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _back();
+      },
+      child: SheetScaffold(
+        title: parent?.name ?? tr('分类'),
+        leadingLabel: parent == null ? tr('完成') : tr('返回'),
+        onLeading: parent == null ? null : _back,
+        // iOS push between the overview and a parent's page; each level scrolls on its own.
+        body: PushSwitcher(direction: _direction, child: content),
+      ),
     );
   }
 }
 
 /// New category, or edit an existing one ([editing]): name, icon, and optional parent (two levels).
 class CategoryEditor extends StatefulWidget {
-  const CategoryEditor({super.key, this.editing});
+  const CategoryEditor({super.key, this.editing, this.initialKind, this.initialParentID});
   final LedgerCategory? editing;
+
+  /// Parent for a new category (添加子分类 from inside a parent in 编辑分类).
+  final String? initialParentID;
+
+  /// Kind for a new category when the caller already knows it (e.g. opened from the category chooser).
+  final EntryKind? initialKind;
 
   @override
   State<CategoryEditor> createState() => _CategoryEditorState();
@@ -296,9 +353,9 @@ class CategoryEditor extends StatefulWidget {
 
 class _CategoryEditorState extends State<CategoryEditor> {
   late final TextEditingController _name = TextEditingController(text: widget.editing?.name ?? '');
-  late EntryKind _kind = widget.editing?.kind ?? EntryKind.expense;
+  late EntryKind _kind = widget.editing?.kind ?? widget.initialKind ?? EntryKind.expense;
   late String _icon = widget.editing == null ? categoryIconChoices.first : categoryIcon(widget.editing!);
-  late String? _parentID = widget.editing?.parentID;
+  late String? _parentID = widget.editing == null ? widget.initialParentID : widget.editing!.parentID;
 
   @override
   void dispose() {
@@ -306,43 +363,24 @@ class _CategoryEditorState extends State<CategoryEditor> {
     super.dispose();
   }
 
+  /// 上级分类 uses the same emoji-grid category sheet as 记一笔, first level only, with 无 first.
   Future<void> _pickParent(BuildContext context) async {
     final store = StoreScope.read(context);
-    final ledger = store.ledger;
-    final editing = widget.editing;
-    final options = ledger.categories
-        .where((c) =>
-            c.kind == _kind &&
-            c.id != editing?.id &&
-            (c.parentID == null || ledger.categoryByID(c.parentID!) == null))
-        .toList();
     final picked = await showCwSheet<String>(
       context,
-      (sheetContext) {
-        final p = Palette.of(sheetContext);
-        Widget option(String? id, Widget leading, String label) => Pressable(
-              onTap: () => Navigator.of(sheetContext).pop(id ?? ''),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 50),
-                child: Row(children: [
-                  leading,
-                  const SizedBox(width: 10),
-                  Expanded(child: Text(label, style: cw(15, color: p.ink))),
-                  if ((id ?? '') == (_parentID ?? '')) LIcon('check', size: 18, color: p.accent, strokeWidth: 2.5),
-                ]),
-              ),
-            );
-        return SheetScaffold(
+      (_) => StoreScope(
+        store: store,
+        child: CategoryChooser(
+          kind: _kind,
+          selectedID: _parentID ?? '',
           title: tr('上级分类'),
-          leadingLabel: tr('取消'),
-          body: ListView(padding: const EdgeInsets.fromLTRB(18, 8, 18, 32), children: [
-            FormSection(children: [
-              option(null, const SizedBox(width: 21), tr('无（一级分类）')),
-              for (final c in options) option(c.id, CategoryIcon(c, size: 18), c.name),
-            ]),
-          ]),
-        );
-      },
+          leadingLabel: tr('无'),
+          leadingIcon: 'circle-x',
+          topLevelOnly: true,
+          excludeID: widget.editing?.id,
+          showAdd: false,
+        ),
+      ),
     );
     if (picked != null) setState(() => _parentID = picked.isEmpty ? null : picked);
   }
@@ -381,7 +419,7 @@ class _CategoryEditorState extends State<CategoryEditor> {
               });
               if (ok) Navigator.of(context).pop();
             },
-      body: ListView(padding: const EdgeInsets.fromLTRB(18, 8, 18, 32), children: [
+      body: ListView(clipBehavior: Clip.none, padding: const EdgeInsets.fromLTRB(18, 8, 18, 32), children: [
         // The kind can't change once bills use the category.
         if (editing == null) ...[
           CapsuleSegments<EntryKind>(
@@ -397,7 +435,7 @@ class _CategoryEditorState extends State<CategoryEditor> {
         ],
         FormSection(children: [
           Row(children: [
-            Emoji3DIcon(_icon, size: 22),
+            EmojiIcon(_icon, size: 22),
             const SizedBox(width: 10),
             Expanded(child: FormTextField(controller: _name, hint: tr('分类名称'), onChanged: (_) => setState(() {}))),
           ]),
@@ -405,35 +443,19 @@ class _CategoryEditorState extends State<CategoryEditor> {
             FormRow(
               label: tr('上级分类'),
               chevron: true,
-              trailing: Text(parent?.name ?? tr('无'), style: cw(15, color: p.muted)),
+              trailing: Text(parent?.name ?? tr('无'), style: cw(IOSText.body, color: p.muted)),
               onTap: () => _pickParent(context),
             ),
         ]),
         const SizedBox(height: 18),
         CardCaption(tr('图标')),
         const SizedBox(height: 10),
-        Wrap(spacing: 10, runSpacing: 10, children: [
-          for (final icon in categoryIconChoices)
-            Pressable(
-              selected: icon == _icon,
-              onTap: () {
-                tick();
-                setState(() => _icon = icon);
-              },
-              child: AnimatedContainer(
-                duration: IOSMotion.snappyCurve.duration,
-                curve: IOSMotion.snappyCurve,
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: icon == _icon ? p.accent.withValues(alpha: 0.14) : p.card,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: icon == _icon ? p.accent : p.cardStroke, width: icon == _icon ? 2 : 0.75),
-                ),
-                child: Center(child: Emoji3DIcon(icon, size: 24)),
-              ),
-            ),
-        ]),
+        // The whole Apple emoji set, grouped like the system picker (常用 first: the bookkeeping picks).
+        EmojiPicker(
+          selected: emojiFor(_icon),
+          common: [for (final icon in categoryIconChoices) categoryEmoji[icon]!],
+          onSelected: (emoji) => setState(() => _icon = iconKeyForEmoji(emoji)),
+        ),
       ]),
     );
   }
@@ -452,7 +474,7 @@ class CurrencyPicker extends StatelessWidget {
     return SheetScaffold(
       title: tr('货币'),
       leadingLabel: tr('完成'),
-      body: ListView(padding: const EdgeInsets.fromLTRB(18, 8, 18, 32), children: [
+      body: ListView(clipBehavior: Clip.none, padding: const EdgeInsets.fromLTRB(18, 8, 18, 32), children: [
         FormSection(
           footer: tr('账本只用一种货币。切换后只改变显示的货币符号，已记录的金额不会换算。'),
           children: [
@@ -471,8 +493,8 @@ class CurrencyPicker extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                        Text(currency.name, style: cw(15, color: p.ink)),
-                        Text('${currency.code} · ${currency.symbol}', style: cw(12, color: p.muted)),
+                        Text(currency.name, style: cw(IOSText.body, color: p.ink)),
+                        Text('${currency.code} · ${currency.symbol}', style: cw(IOSText.footnote, color: p.muted)),
                       ]),
                     ),
                     if (currency.code == current) LIcon('check', size: 18, color: p.accent, strokeWidth: 2.5),

@@ -14,6 +14,13 @@ dependencies:
     sdk: flutter
   # Lucide icons are bundled as SVG data (lib/app/lucide_icons.dart) and drawn with flutter_svg.
   flutter_svg: ^2.0.10
+  # SF Symbols-style interface icons (CupertinoIcons font), see lib/app/icons.dart.
+  cupertino_icons: ^1.0.8
+  # Apple's real UIKit controls on iPhone (UISwitch …), hosted as platform views; see IOSSwitch.
+  cupertino_native_better: ^1.7.0
+  # iOS 27-style Liquid Glass drawn by Flutter (refraction, frost, glint) — used where the system's own
+  # glass isn't available (the Mac preview). Needs Impeller + Flutter GPU (FLTEnableFlutterGPU in Info.plist).
+  liquid_glass_renderer: 1.0.0-dev.1
   path_provider: ^2.1.4
   file_picker: ^8.1.2
   # Money Pro database import (read-only).
@@ -28,12 +35,12 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    # Fluent Emoji 3D (Microsoft, MIT licence, assets/emoji3d/LICENSE-fluent-emoji.txt), category icons.
-    - assets/emoji3d/
     # Round flags for the currency picker (from the designer's country_icon set).
     - assets/flags/
     # Empty-state illustrations drawn for Centwise (light + -dark variants).
     - assets/illustrations/
+    # SF Symbols drawn once by the system (macOS 26) as white masks for the settings icon tiles.
+    - assets/sf/
   fonts:
     # Nunito (SIL Open Font License, assets/fonts/OFL-Nunito.txt), static instances of the variable font.
     - family: Nunito

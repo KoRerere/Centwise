@@ -63,4 +63,4 @@ SQLite 的 REAL 字段在 Dart 里先读成浮点再转文本，归档里个别�
 | `lib/app/icons.dart`、`lucide_icons.dart` | Lucide 图标（SVG 数据随包，`scripts/gen_icons.py` 生成）；旧 SF Symbol 名称与分类名关键词映射到 Lucide |
 | `test/core_test.dart` | 核心测试（由 SwiftUI 版测试逐条移植，另加 SwiftUI 备份读取测试） |
 
-第三方：Lucide 图标（ISC，`assets/LICENSE-lucide.txt`），分类图标用 Microsoft Fluent Emoji 3D（MIT，`assets/emoji3d/LICENSE-fluent-emoji.txt`），Nunito 字体（SIL OFL，`assets/fonts/OFL-Nunito.txt`），以及 pub 包 flutter_svg、path_provider、file_picker、sqlite3、sqlite3_flutter_libs。
+第三方：Lucide 图标（ISC，`assets/LICENSE-lucide.txt`），分类图标用系统自带的 Apple emoji（不打包图片），Nunito 字体（SIL OFL，`assets/fonts/OFL-Nunito.txt`），以及 pub 包 flutter_svg、path_provider、file_picker、sqlite3、sqlite3_flutter_libs。

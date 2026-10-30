@@ -45,9 +45,9 @@ class AccountSection extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(tr('登录 Centwise'), style: cw(16, weight: FontWeight.w600, color: p.ink)),
+                    Text(tr('登录 Centwise'), style: cw(IOSText.body, weight: FontWeight.w600, color: p.ink)),
                     const SizedBox(height: 2),
-                    Text(tr('同步你的账本，换设备不丢数据'), style: cw(13, color: p.muted)),
+                    Text(tr('同步你的账本，换设备不丢数据'), style: cw(IOSText.footnote, color: p.muted)),
                   ]),
                 ),
                 LIcon('chevron-right', size: 16, color: p.muted.withValues(alpha: 0.7)),
@@ -70,9 +70,9 @@ class AccountSection extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(account.name, style: cw(16, weight: FontWeight.w600, color: p.ink)),
+                Text(account.name, style: cw(IOSText.body, weight: FontWeight.w600, color: p.ink)),
                 const SizedBox(height: 2),
-                Text(account.email, style: cw(13, color: p.muted), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(account.email, style: cw(IOSText.footnote, color: p.muted), maxLines: 1, overflow: TextOverflow.ellipsis),
               ]),
             ),
           ]),
@@ -80,7 +80,7 @@ class AccountSection extends StatelessWidget {
         FormRow(
           icon: 'cloud',
           label: tr('iCloud 同步'),
-          trailing: Switch(
+          trailing: IOSSwitch(
             value: account.syncEnabled,
             onChanged: (on) => store.update(() => account.syncEnabled = on),
           ),
@@ -89,7 +89,7 @@ class AccountSection extends StatelessWidget {
           FormRow(
             icon: 'refresh-cw',
             label: tr('立即同步'),
-            trailing: Text(synced == null ? tr('尚未同步') : tr('上次 {time}', {'time': _time(synced)}), style: cw(14, color: p.muted)),
+            trailing: Text(synced == null ? tr('尚未同步') : tr('上次 {time}', {'time': _time(synced)}), style: cw(IOSText.subheadline, color: p.muted)),
             onTap: () => store.update(() => account.lastSynced = DateTime.now()),
           ),
         FormRow(icon: 'log-out', label: tr('退出登录'), chevron: true, onTap: () => _signOut(context)),
@@ -143,11 +143,11 @@ class SignInSheet extends StatelessWidget {
     final p = Palette.of(context);
     return SheetScaffold(
       title: tr('登录'),
-      body: ListView(padding: const EdgeInsets.fromLTRB(24, 28, 24, 32), children: [
+      body: ListView(clipBehavior: Clip.none, padding: const EdgeInsets.fromLTRB(24, 28, 24, 32), children: [
         Text(tr('欢迎使用 Centwise'), textAlign: TextAlign.center, style: cw(24, weight: FontWeight.w700, color: p.ink)),
         const SizedBox(height: 8),
         Text(tr('登录后，你的账本会通过 iCloud\n在 iPhone 和 Mac 之间保持同步。'),
-            textAlign: TextAlign.center, style: cw(15, color: p.muted, height: 1.5)),
+            textAlign: TextAlign.center, style: cw(IOSText.body, color: p.muted, height: 1.5)),
         const SizedBox(height: 32),
         AppleSignInButton(onTap: () => _signInWithApple(context)),
         const SizedBox(height: 28),
@@ -155,9 +155,9 @@ class SignInSheet extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Column(children: [
             _Benefit(icon: 'cloud-check', title: tr('存在你自己的 iCloud'), detail: tr('Centwise 没有服务器，不经手你的账本。')),
-            Divider(height: 1, thickness: 1, color: p.track),
+            Divider(height: 0.5, thickness: 0.5, color: p.cardStroke),
             _Benefit(icon: 'refresh-cw', title: tr('多设备自动同步'), detail: tr('在 iPhone 记一笔，Mac 上马上能看到。')),
-            Divider(height: 1, thickness: 1, color: p.track),
+            Divider(height: 0.5, thickness: 0.5, color: p.cardStroke),
             _Benefit(icon: 'shield-check', title: tr('不登录也能用'), detail: tr('所有功能照常可用，数据只保存在本机。')),
           ]),
         ),
@@ -182,9 +182,9 @@ class _Benefit extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: cw(15, weight: FontWeight.w600, color: p.ink)),
+            Text(title, style: cw(IOSText.body, weight: FontWeight.w600, color: p.ink)),
             const SizedBox(height: 2),
-            Text(detail, style: cw(13, color: p.muted, height: 1.4)),
+            Text(detail, style: cw(IOSText.footnote, color: p.muted, height: 1.4)),
           ]),
         ),
       ]),
@@ -219,7 +219,7 @@ class AppleSignInButton extends StatelessWidget {
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           SvgPicture.string(_logo, width: 18, height: 18, theme: SvgTheme(currentColor: foreground)),
           const SizedBox(width: 8),
-          Text(tr('通过 Apple 登录'), style: cw(17, weight: FontWeight.w600, color: foreground)),
+          Text(tr('通过 Apple 登录'), style: cw(IOSText.headline, weight: FontWeight.w600, color: foreground)),
         ]),
       ),
     );

@@ -8,6 +8,10 @@ import 'motion.dart';
 import 'theme.dart';
 import '../l10n/l10n.dart';
 
+/// 近六个月 bars: spending in orange, income in sky blue (iOS system orange / a saturated sky blue).
+const Color _expenseBar = Color(0xFFFF9500);
+const Color _incomeBar = Color(0xFF0EA5F2);
+
 /// Monotone cubic path through points (Fritsch–Carlson), matching Swift Charts' `.monotone`.
 Path monotonePath(List<Offset> points) {
   final path = Path();
@@ -95,11 +99,14 @@ class CumulativeChart extends StatelessWidget {
       height: height,
       child: LayoutBuilder(builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final maxValue = [...current, ...previous, 1.0].reduce(math.max);
-        Offset at(int index, double value) => Offset(
-              domainMax <= 1 ? 0 : index / (domainMax - 1) * width,
-              height - 4 - (value / maxValue) * (height - 12),
-            );
+        // The scale covers every value, below zero too (refunds can take a running total under 0),
+        // so the line always stays inside the chart.
+        final all = [...current, ...previous];
+        final maxValue = [...all, 1.0].reduce(math.max);
+        final minValue = [...all, 0.0].reduce(math.min);
+        final span = maxValue - minValue <= 0 ? 1.0 : maxValue - minValue;
+        double y(double value) => height - 4 - ((value - minValue) / span) * (height - 12);
+        Offset at(int index, double value) => Offset(domainMax <= 1 ? 0 : index / (domainMax - 1) * width, y(value));
         return CustomPaint(
           size: Size(width, height),
           painter: _CumulativePainter(
@@ -108,6 +115,7 @@ class CumulativeChart extends StatelessWidget {
             color: color,
             muted: p.muted.withValues(alpha: 0.55),
             baseline: p.track,
+            zeroY: y(0),
           ),
         );
       }),
@@ -131,17 +139,22 @@ class CumulativeChart extends StatelessWidget {
 }
 
 class _CumulativePainter extends CustomPainter {
-  _CumulativePainter({required this.current, required this.previous, required this.color, required this.muted, required this.baseline});
+  _CumulativePainter({required this.current, required this.previous, required this.color, required this.muted, required this.baseline, required this.zeroY});
   final List<Offset> current;
   final List<Offset> previous;
   final Color color;
   final Color muted;
   final Color baseline;
 
+  /// Where 0 sits (the bottom, unless the total went below zero).
+  final double zeroY;
+
   @override
   void paint(Canvas canvas, Size size) {
+    // Never draw outside the chart (the end dot gets a few points of room).
+    canvas.clipRect(Rect.fromLTRB(-6, -6, size.width + 6, size.height + 6));
     // Zero line, so the start and the scale read clearly.
-    canvas.drawLine(Offset(0, size.height - 4), Offset(size.width, size.height - 4), Paint()..color = baseline..strokeWidth = 1);
+    canvas.drawLine(Offset(0, zeroY), Offset(size.width, zeroY), Paint()..color = baseline..strokeWidth = 1);
     if (previous.length > 1) {
       canvas.drawPath(
         _dashed(monotonePath(previous)),
@@ -167,7 +180,7 @@ class _CumulativePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _CumulativePainter old) =>
-      old.current != current || old.previous != previous || old.color != color || old.baseline != baseline;
+      old.current != current || old.previous != previous || old.color != color || old.baseline != baseline || old.zeroY != zeroY;
 }
 
 /// Twelve monthly bars with a dashed monthly-average line.
@@ -360,9 +373,9 @@ class _TrendChartState extends State<TrendChart> {
         key: const ValueKey('legend'),
         alignment: Alignment.centerLeft,
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          _legendItem(p, tr('收入'), p.income),
+          _legendItem(p, tr('收入'), _incomeBar),
           const SizedBox(width: 14),
-          _legendItem(p, tr('支出'), p.brand),
+          _legendItem(p, tr('支出'), _expenseBar),
         ]),
       );
     } else {
@@ -388,9 +401,9 @@ class _TrendChartState extends State<TrendChart> {
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              figure(tr('收入'), p.income, income),
+              figure(tr('收入'), _incomeBar, income),
               const SizedBox(width: 12),
-              figure(tr('支出'), p.brand, expense),
+              figure(tr('支出'), _expenseBar, expense),
               const SizedBox(width: 12),
               figure(tr('结余'), null, income - expense),
             ]),
@@ -475,9 +488,9 @@ class _TrendChartState extends State<TrendChart> {
                         opacity: selected == null || selected == i ? 1 : 0.35,
                         child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
                           Row(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-                            bar(income[i], p.income),
+                            bar(income[i], _incomeBar),
                             const SizedBox(width: _barGap),
-                            bar(expense[i], p.brand),
+                            bar(expense[i], _expenseBar),
                           ]),
                           SizedBox(
                             height: _labelHeight,

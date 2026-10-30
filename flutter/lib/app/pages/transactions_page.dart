@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/models.dart';
 import '../components.dart';
 import '../icons.dart';
+import '../sheets.dart' show PullDownItem, showPullDownMenu;
 import '../store.dart';
 import '../theme.dart';
 import '../../l10n/l10n.dart';
@@ -124,32 +125,29 @@ class _TransactionsPageState extends State<TransactionsPage> {
             ? tr('还没有符合条件的账单')
             : switch (store.period) { Period.day => tr('这一天没有符合条件的账单'), Period.month => tr('这个月没有符合条件的账单'), Period.year => tr('近一年没有符合条件的账单') };
     final groups = groupedByDay(filtered);
-    // A filter that isn't the default is always spelled out, with a one-tap way back.
-    final filterChip = _kind == null
-        ? null
-        : Padding(
-            padding: EdgeInsets.zero,
-            child: Row(children: [
-              Pressable(
-                semanticLabel: tr('清除筛选'),
-                onTap: () => setState(() => _kind = null),
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
-                  // Solid card colour: the chip sits on the blue header, where a tinted fill would vanish.
-                  decoration: BoxDecoration(
-                    color: p.card,
-                    borderRadius: BorderRadius.circular(99),
-                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2))],
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Text(tr('类型：{kind}', {'kind': _kind!.title}), style: cw(13, weight: FontWeight.w600, color: p.accent)),
-                    const SizedBox(width: 4),
-                    LIcon('x', size: 14, color: p.accent, strokeWidth: 2.5),
-                  ]),
-                ),
-              ),
-            ]),
-          );
+    final headerRows = <Widget>[
+      Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+        Expanded(child: Text(heading, style: cw(19, weight: FontWeight.w700, color: p.ink))),
+        AmountText(total, size: 20, weight: FontWeight.w700, sign: '', color: p.ink),
+      ]),
+      // "n 笔 · 合计为…" helps for a month or a year; a single day's list says it all already.
+      // (While searching all dates it stays, with the 只看… link.)
+      if (store.period != Period.day || _allDates) ...[
+      const SizedBox(height: 2),
+      Row(children: [
+        Expanded(
+          child: Text(tr('{n} 笔 · 合计为{label}', {'n': filtered.length, 'label': totalLabel}), style: cw(IOSText.footnote, color: p.muted)),
+        ),
+        // The bottom capsule is the only period control; searching from the header magnifier
+        // looks through every date, and this goes back to the selected period.
+        if (_allDates)
+          Pressable(
+            onTap: () => setState(() => _allDates = false),
+            child: Text(tr('只看{scope}', {'scope': scopeName}), style: cw(IOSText.footnote, weight: FontWeight.w600, color: p.accent)),
+          ),
+      ]),
+      ],
+    ];
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
@@ -160,14 +158,64 @@ class _TransactionsPageState extends State<TransactionsPage> {
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         slivers: [
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            // Top: the page's own gutter plus the floating header the content scrolls up behind.
+            padding: EdgeInsets.fromLTRB(16, 4 + HeaderInset.of(context), 16, 16),
             sliver: SliverToBoxAdapter(
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 _searchCard(p),
-                if (filterChip != null) ...[const SizedBox(height: 10), filterChip],
               ]),
             ),
           ),
+          if (filtered.isEmpty)
+            // No bills: one rounded card that fills the rest of the screen, ending a little above the
+            // floating bottom controls, with the dotted empty state taking all the space under the heading.
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverFillRemaining(
+                hasScrollBody: false,
+                // The gap under the card lives inside the fill (a SliverPadding after it would push the
+                // card's end below the screen).
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: bottomControlsClearance(context, extra: 12)),
+                  child: Container(
+                  constraints: const BoxConstraints(minHeight: 360),
+                  decoration: BoxDecoration(color: p.card, borderRadius: BorderRadius.circular(15)),
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    ...headerRows,
+                    const SizedBox(height: 20),
+                    // The dotted canvas runs edge to edge across the card and down to its bottom edge.
+                    Expanded(
+                      child: EmptyState(icon: 'folder-search', illustration: query.isNotEmpty ? 'search' : 'receipt', title: emptyLabel, bleed: 20, bleedBottom: 20,
+                          // Above centre: the eye expects it in the upper part of a tall card.
+                          alignment: const Alignment(0, -0.4)),
+                    ),
+                    if (_kind != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Center(
+                          child: Pressable(
+                            onTap: () => setState(() => _kind = null),
+                            child: Text(tr('清除筛选'), style: cw(IOSText.subheadline, weight: FontWeight.w600, color: p.accent)),
+                          ),
+                        ),
+                      ),
+                    if (query.isNotEmpty && !_allDates)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Center(
+                          child: Pressable(
+                            onTap: () => setState(() => _allDates = true),
+                            child: Text(tr('改为搜索全部日期'), style: cw(IOSText.subheadline, weight: FontWeight.w600, color: p.accent)),
+                          ),
+                        ),
+                      ),
+                  ]),
+                ),
+                ),
+              ),
+            )
+          else ...[
           // The list sits on a card-coloured panel with rounded top corners, so the text stays
           // readable over the blue header gradient.
           SliverPadding(
@@ -182,45 +230,8 @@ class _TransactionsPageState extends State<TransactionsPage> {
               sliver: SliverMainAxisGroup(slivers: [
                 SliverToBoxAdapter(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      Expanded(child: Text(heading, style: cw(22, weight: FontWeight.w700, color: p.ink))),
-                      AmountText(total, size: 20, weight: FontWeight.w700, sign: '', color: p.ink),
-                    ]),
-                    const SizedBox(height: 2),
-                    Row(children: [
-                      Expanded(
-                        child: Text(tr('{n} 笔 · 合计为{label}', {'n': filtered.length, 'label': totalLabel}), style: cw(12, color: p.muted)),
-                      ),
-                      // The bottom capsule is the only period control; searching from the header magnifier
-                      // looks through every date, and this goes back to the selected period.
-                      if (_allDates)
-                        Pressable(
-                          onTap: () => setState(() => _allDates = false),
-                          child: Text(tr('只看{scope}', {'scope': scopeName}), style: cw(12, weight: FontWeight.w600, color: p.accent)),
-                        ),
-                    ]),
+                    ...headerRows,
                     const SizedBox(height: 4),
-                    if (filtered.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 24),
-                        child: Column(children: [
-                          EmptyState(icon: 'folder-search', illustration: query.isNotEmpty ? 'search' : 'receipt', title: emptyLabel),
-                          if (_kind != null) ...[
-                            const SizedBox(height: 12),
-                            Pressable(
-                              onTap: () => setState(() => _kind = null),
-                              child: Text(tr('清除筛选'), style: cw(14, weight: FontWeight.w600, color: p.accent)),
-                            ),
-                          ],
-                          if (query.isNotEmpty && !_allDates) ...[
-                            const SizedBox(height: 12),
-                            Pressable(
-                              onTap: () => setState(() => _allDates = true),
-                              child: Text(tr('改为搜索全部日期'), style: cw(14, weight: FontWeight.w600, color: p.accent)),
-                            ),
-                          ],
-                        ]),
-                      ),
                   ]),
                 ),
                 SliverList.builder(
@@ -246,6 +257,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             sliver: SliverFillRemaining(hasScrollBody: false, child: ColoredBox(color: p.card)),
           ),
+          ],
         ],
       ),
       ),
@@ -254,59 +266,86 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
   Widget _searchCard(Palette p) {
     String kindLabel(EntryKind? kind) => kind == null ? tr('全部') : kind.title;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        color: p.card,
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: p.cardStroke, width: 0.75),
-      ),
-      child: Row(children: [
-        LIcon('search', size: 18, color: p.muted),
-        const SizedBox(width: 10),
-        Expanded(
-          child: TextField(
-            controller: _search,
-            focusNode: _searchFocus,
-            textInputAction: TextInputAction.search,
-            onChanged: (_) => setState(() {}),
-            autocorrect: false,
-            style: cw(16, color: p.ink),
-            decoration: InputDecoration(hintText: tr('搜索备注、分类、账户、交易对象'), contentPadding: EdgeInsets.symmetric(vertical: 12)),
+    // iOS 26 Settings-style search: a Liquid Glass capsule floating at the top of the list, same
+    // material as the period capsule at the bottom (real refraction on the iPhone, frost on the Mac).
+    return LiquidGlass(
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      child: SizedBox(
+        height: 50,
+        child: Row(children: [
+          LIcon('search', size: 18, color: p.muted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: _search,
+              focusNode: _searchFocus,
+              textInputAction: TextInputAction.search,
+              onChanged: (_) => setState(() {}),
+              autocorrect: false,
+              textAlignVertical: TextAlignVertical.center,
+              style: cw(IOSText.body, color: p.ink),
+              // textAlignVertical centers the field in the 50 pt capsule; the 4.5 pt bottom padding
+              // optically levels CJK glyphs with the magnifier.
+              decoration: InputDecoration(hintText: tr('搜索'), isCollapsed: true, contentPadding: const EdgeInsets.only(bottom: 4.5)),
+            ),
           ),
-        ),
-        if (_search.text.isNotEmpty)
-          Pressable(
-            semanticLabel: tr('清除搜索'),
-            onTap: () => setState(_search.clear),
-            child: Padding(padding: const EdgeInsets.all(4), child: LIcon('circle-x', size: 18, color: p.muted)),
-          ),
-        if (widget.categoryID == null)
-        PopupMenuButton<String>(
-          tooltip: tr('按类型筛选'),
-          initialValue: _kind?.name ?? 'all',
-          color: p.card,
-          surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          position: PopupMenuPosition.under,
-          // A null item value would be treated as "cancelled", so "all" is a string key.
-          onSelected: (key) => setState(() => _kind = key == 'all' ? null : EntryKind.parse(key)),
-          itemBuilder: (context) => [
-            for (final kind in <EntryKind?>[null, EntryKind.expense, EntryKind.income, EntryKind.transfer, EntryKind.adjustment])
-              PopupMenuItem<String>(
-                value: kind?.name ?? 'all',
-                child: Row(children: [
-                  Expanded(child: Text(kindLabel(kind), style: cw(15, weight: FontWeight.w400, color: p.ink))),
-                  if (kind == _kind) LIcon('check', size: 16, color: p.accent),
+          if (_search.text.isNotEmpty)
+            Pressable(
+              semanticLabel: tr('清除搜索'),
+              onTap: () => setState(_search.clear),
+              child: Padding(padding: const EdgeInsets.all(4), child: LIcon('circle-x', size: 18, color: p.muted)),
+            ),
+          // A type filter in force is spelled out right next to its button, with a one-tap ✕ back to 全部.
+          if (_kind != null && widget.categoryID == null)
+            Pressable(
+              semanticLabel: tr('清除筛选'),
+              onTap: () => setState(() => _kind = null),
+              child: Container(
+                height: 28,
+                padding: const EdgeInsets.fromLTRB(10, 0, 7, 0),
+                decoration: BoxDecoration(color: p.track, borderRadius: BorderRadius.circular(99)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(_kind!.title, style: cw(IOSText.footnote, weight: FontWeight.w600, color: p.ink)),
+                  const SizedBox(width: 3),
+                  LIcon('x', size: 13, color: p.muted, strokeWidth: 2.5),
                 ]),
               ),
-          ],
-          child: Padding(
-            padding: const EdgeInsets.only(left: 6),
-            child: LIcon('list-filter', size: 18, color: _kind == null ? p.muted : p.accent, strokeWidth: _kind == null ? 2 : 2.5),
-          ),
-        ),
-      ]),
+            ),
+          if (_kind != null && widget.categoryID == null) const SizedBox(width: 8),
+          if (widget.categoryID == null)
+            // Builder: the menu needs the button's own position to open from it.
+            Builder(builder: (button) => Pressable(
+              semanticLabel: tr('按类型筛选'),
+              // The types come up as an iOS pull-down menu right under the button.
+              onTap: () async {
+                // 转账 / 余额调整 can't be created any more; they are offered only while the ledger
+                // still has such (older) bills to find.
+                final entries = StoreScope.read(context).ledger.entries;
+                final kinds = <EntryKind?>[
+                  null,
+                  EntryKind.expense,
+                  EntryKind.income,
+                  for (final k in const [EntryKind.transfer, EntryKind.adjustment])
+                    if (k == _kind || entries.any((e) => e.kind == k)) k,
+                ];
+                final picked = await showPullDownMenu<String>(
+                  button,
+                  items: [
+                    for (final kind in kinds)
+                      PullDownItem(value: kind?.name ?? 'all', label: kindLabel(kind), checked: kind == _kind),
+                  ],
+                );
+                if (picked != null && picked != (_kind?.name ?? 'all')) {
+                  setState(() => _kind = picked == 'all' ? null : EntryKind.parse(picked));
+                }
+              },
+              child: Padding(
+                padding: const EdgeInsets.only(left: 6),
+                child: LIcon('list-filter', size: 18, color: _kind == null ? p.muted : p.accent, strokeWidth: _kind == null ? 2 : 2.5),
+              ),
+            )),
+        ]),
+      ),
     );
   }
 }

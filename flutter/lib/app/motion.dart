@@ -69,3 +69,47 @@ class SpringCurve extends Curve {
   @override
   double transformInternal(double t) => _sim.x(t * _seconds);
 }
+
+
+/// Moving between two levels shown inside one sheet (e.g. a category and its subcategories).
+/// [child] must carry a key that changes per level; [direction] is +1 going in, −1 coming back, 0 for
+/// a plain cross-fade (e.g. search results replacing the page).
+///
+/// Sheets here are glass, so one page can't cover the other the way a UIKit push does; instead the
+/// old page drifts a quarter width away and fades out in the first half, while the new one drifts in
+/// from the other side and fades in — the two barely overlap. 380 ms on an ease-out curve, mirrored
+/// exactly for the page leaving (AnimatedSwitcher runs that one in reverse, hence [Curve.flipped]).
+/// Each level should be its own scroll view, so a page always opens at its top.
+class PushSwitcher extends StatelessWidget {
+  const PushSwitcher({super.key, required this.direction, required this.child});
+  final int direction;
+  final Widget child;
+
+  static const Duration duration = Duration(milliseconds: 380);
+  static const Curve curve = Cubic(0.2, 0.8, 0.25, 1.0);
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: duration,
+      switchInCurve: curve,
+      switchOutCurve: curve.flipped,
+      layoutBuilder: (current, previous) => Stack(fit: StackFit.expand, children: [...previous, if (current != null) current]),
+      transitionBuilder: (page, animation) {
+        final incoming = page.key == child.key;
+        // Incoming: 0 → 1 as it arrives. Outgoing: runs 1 → 0 as it leaves.
+        final opacity = CurvedAnimation(
+          parent: animation,
+          curve: incoming ? const Interval(0.25, 1.0, curve: Curves.easeOut) : const Interval(0.5, 1.0, curve: Curves.easeIn),
+        );
+        if (direction == 0) return FadeTransition(opacity: opacity, child: page);
+        final dx = (incoming ? 0.25 : -0.25) * direction;
+        return FadeTransition(
+          opacity: opacity,
+          child: SlideTransition(position: Tween(begin: Offset(dx, 0), end: Offset.zero).animate(animation), child: page),
+        );
+      },
+      child: child,
+    );
+  }
+}

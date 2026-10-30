@@ -9,7 +9,7 @@ import '../sheets.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../../l10n/l10n.dart';
-import 'categories_page.dart' show BudgetCard, BudgetEditor;
+import 'categories_page.dart' show BudgetCard, BudgetEditor, BudgetSetupCard;
 import 'transactions_page.dart' show TransactionsPage;
 
 /// Overview: what was spent (spend card, or the year card), the bills behind it, and what is left of this month's budget.
@@ -32,9 +32,9 @@ class DashboardPage extends StatelessWidget {
           child: Column(children: [
             LIcon('pencil', size: 30, color: p.muted),
             const SizedBox(height: 10),
-            Text(tr('从今天的第一笔开始'), style: cw(17, weight: FontWeight.w700, color: p.ink)),
+            Text(tr('从今天的第一笔开始'), style: cw(IOSText.headline, weight: FontWeight.w700, color: p.ink)),
             const SizedBox(height: 6),
-            Text(tr('点右下角加号记下收支，或在设置里导入旧账本。'), textAlign: TextAlign.center, style: cw(13, color: p.muted)),
+            Text(tr('点右下角加号记下收支，或在设置里导入旧账本。'), textAlign: TextAlign.center, style: cw(IOSText.footnote, color: p.muted)),
           ]),
         )
       // 近一年: what the year went on, by category, instead of a list of individual bills.
@@ -45,24 +45,15 @@ class DashboardPage extends StatelessWidget {
       if (totalBudget.isNotEmpty)
         BudgetCard(budget: totalBudget.first)
       else
-        Pressable(
-          onTap: () => showCwSheet<void>(context, (_) => StoreScope(store: store, child: const BudgetEditor())),
-          child: CwCard(
-            child: Row(children: [
-              LIcon('piggy-bank', size: 20, color: p.accent),
-              const SizedBox(width: 10),
-              Expanded(child: Text(tr('设一个本月预算，随时看还剩多少'), style: cw(15, color: p.ink))),
-              Text(tr('设预算'), style: cw(15, weight: FontWeight.w600, color: p.accent)),
-            ]),
-          ),
-        ),
+        // Same set-up card as 分类 → 月预算.
+        BudgetSetupCard(onTap: () => showCwSheet<void>(context, (_) => StoreScope(store: store, child: const BudgetEditor()))),
     ]);
   }
 }
 
 /// Scrollable page body with the shared gutters and room for the floating controls.
 class PageList extends StatelessWidget {
-  const PageList({super.key, required this.children, this.spacing = 18});
+  const PageList({super.key, required this.children, this.spacing = 26});
   final List<Widget> children;
   final double spacing;
 
@@ -70,7 +61,8 @@ class PageList extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
     return ListView(
-      padding: EdgeInsets.fromLTRB(16, 4, 16, bottomControlsClearance(context)),
+      // Top: the page's own gutter plus the floating header the content scrolls up behind.
+      padding: EdgeInsets.fromLTRB(16, 8 + HeaderInset.of(context), 16, bottomControlsClearance(context)),
       children: [
         Center(
           child: ConstrainedBox(
@@ -126,7 +118,7 @@ class _SpendCard extends StatelessWidget {
     return CwCard(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(tr('{period}支出', {'period': periodLabel}), style: cw(13, color: p.muted)),
+        Text(tr('{period}支出', {'period': periodLabel}), style: cw(IOSText.footnote, color: p.muted)),
         const SizedBox(height: 4),
         AmountText(series.currentTotal, size: 34, weight: FontWeight.w700, color: p.ink),
         const SizedBox(height: 4),
@@ -137,7 +129,7 @@ class _SpendCard extends StatelessWidget {
           ],
           Flexible(
             child: TextWithAmount(comparison, difference.abs(),
-                style: cw(13, color: p.muted), amountColor: difference == 0 ? null : (over ? p.over : p.under)),
+                style: cw(IOSText.footnote, color: p.muted), amountColor: difference == 0 ? null : (over ? p.over : p.under)),
           ),
         ]),
         const SizedBox(height: 14),
@@ -154,11 +146,11 @@ class _SpendCard extends StatelessWidget {
         Row(children: [
           _legendLine(p.brand, false),
           const SizedBox(width: 5),
-          Text(periodLabel, style: cw(12, color: p.muted)),
+          Text(periodLabel, style: cw(IOSText.footnote, color: p.muted)),
           const SizedBox(width: 14),
           _legendLine(p.muted.withValues(alpha: 0.7), true),
           const SizedBox(width: 5),
-          Text(isDay ? (store.isCurrentPeriod ? tr('昨天') : tr('前一天')) : tr('上月'), style: cw(12, color: p.muted)),
+          Text(isDay ? (store.isCurrentPeriod ? tr('昨天') : tr('前一天')) : tr('上月'), style: cw(IOSText.footnote, color: p.muted)),
         ]),
       ]),
     );
@@ -253,8 +245,8 @@ class _YearCard extends StatelessWidget {
     Widget metric(String title, int value, Color color) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 11),
           child: Row(children: [
-            Expanded(child: Text(title, style: cw(15, weight: FontWeight.w400, color: p.ink))),
-            AmountText(value, size: 16, weight: FontWeight.w700, color: color),
+            Expanded(child: Text(title, style: cw(IOSText.body, weight: FontWeight.w400, color: p.ink))),
+            AmountText(value, size: IOSText.body, weight: FontWeight.w500, color: color),
           ]),
         );
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -264,11 +256,11 @@ class _YearCard extends StatelessWidget {
           Align(
             alignment: Alignment.centerLeft,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(tr('{period}支出', {'period': store.isCurrentPeriod ? store.periodWord : store.periodName}), style: cw(13, color: p.muted)),
+              Text(tr('{period}支出', {'period': store.isCurrentPeriod ? store.periodWord : store.periodName}), style: cw(IOSText.footnote, color: p.muted)),
               const SizedBox(height: 4),
               AmountText(total, size: 34, weight: FontWeight.w700, color: p.ink),
               const SizedBox(height: 4),
-              TextWithAmount(tr('平均每月 {amount}'), average, style: cw(13, color: p.muted)),
+              TextWithAmount(tr('平均每月 {amount}'), average, style: cw(IOSText.footnote, color: p.muted)),
             ]),
           ),
           const SizedBox(height: 14),
@@ -282,21 +274,21 @@ class _YearCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Text('${store.yearRangeText} · ${tr('红色高于月均，绿色低于月均')}', style: cw(11, color: p.muted)),
+          Text('${store.yearRangeText} · ${tr('深色高于月均，浅色低于月均')}', style: cw(IOSText.caption1, color: p.muted)),
         ]),
       ),
       const SizedBox(height: 18),
       CardCaption(tr('年度指标'), trailing: tr('按 {n} 个月平均', {'n': store.averageMonthCount})),
-      const SizedBox(height: 10),
+      const SizedBox(height: 8),
       CwCard(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
         child: Column(children: [
           metric(tr('近一年总支出'), total, p.ink),
-          Divider(height: 1, color: p.track),
+          Divider(height: 0.5, thickness: 0.5, color: p.cardStroke),
           metric(tr('平均每月支出'), average, p.ink),
-          Divider(height: 1, color: p.track),
+          Divider(height: 0.5, thickness: 0.5, color: p.cardStroke),
           metric(tr('近一年总收入'), incomeTotal, p.income),
-          Divider(height: 1, color: p.track),
+          Divider(height: 0.5, thickness: 0.5, color: p.cardStroke),
           metric(tr('平均每月结余'), averageIncome - average, averageIncome - average >= 0 ? p.income : p.over),
         ]),
       ),
@@ -323,13 +315,13 @@ class _YearCategoryGrid extends StatelessWidget {
         );
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       CardCaption(tr('分类支出'), trailing: tr('共 {n} 类', {'n': spending.length})),
-      const SizedBox(height: 10),
+      const SizedBox(height: 8),
       CwCard(
         padding: const EdgeInsets.fromLTRB(10, 14, 10, 6),
         child: spending.isEmpty
             ? Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(tr('近一年还没有支出'), textAlign: TextAlign.center, style: cw(14, color: p.muted)),
+                child: Text(tr('近一年还没有支出'), textAlign: TextAlign.center, style: cw(IOSText.subheadline, color: p.muted)),
               )
             : LayoutBuilder(builder: (context, constraints) {
                 const columns = 4;
@@ -344,16 +336,16 @@ class _YearCategoryGrid extends StatelessWidget {
                         child: Padding(
                           padding: const EdgeInsets.only(bottom: 14),
                           child: Column(children: [
-                            // One line-icon style and one colour for every tile, so 20+ categories read as a calm grid.
+                            // The category's 3D emoji, as everywhere else, on a light grey disc.
                             Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(color: p.accent.withValues(alpha: 0.1), shape: BoxShape.circle),
-                              child: Center(child: DuoIcon(categoryIcon(category), size: 22, color: p.brandDeep, detailColor: Color.lerp(p.accent, p.card, 0.45))),
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(color: p.canvas, shape: BoxShape.circle),
+                              child: Center(child: CategoryIcon(category, size: 26)),
                             ),
                             const SizedBox(height: 6),
                             Text(category.name,
-                                maxLines: 1, overflow: TextOverflow.ellipsis, style: cw(12, color: p.muted)),
+                                maxLines: 1, overflow: TextOverflow.ellipsis, style: cw(IOSText.footnote, color: p.muted)),
                             const SizedBox(height: 2),
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -383,9 +375,10 @@ class _RecentCard extends StatelessWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       CardCaption(tr('最近账单'),
           trailing: entries.isEmpty ? null : tr('共 {n} 笔消费', {'n': entries.length}), onTap: onShowTransactions),
-      const SizedBox(height: 10),
+      const SizedBox(height: 8),
       CwCard(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        // Empty: the dotted state fills the whole card.
+        padding: entries.isEmpty ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         child: entries.isEmpty
             ? EmptyState(
                 icon: 'receipt',

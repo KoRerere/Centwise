@@ -1,13 +1,16 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'components.dart';
 import 'entry_editor.dart';
 import 'icons.dart';
 import 'motion.dart';
-import 'pages/accounts_page.dart';
 import 'pages/categories_page.dart';
 import 'pages/dashboard_page.dart';
 import 'pages/settings_page.dart';
+import 'pages/subscriptions_page.dart';
 import 'pages/transactions_page.dart';
 import 'sheets.dart';
 import 'store.dart';
@@ -17,9 +20,9 @@ import '../l10n/l10n.dart';
 /// Top-level pages, shown as Copilot-style pill tabs under the brand title.
 enum CentwisePage {
   dashboard('概览'),
+  subscriptions('订阅'),
   categories('分类'),
-  transactions('账单'),
-  accounts('账户');
+  transactions('账单');
 
   const CentwisePage(this.source);
   final String source;
@@ -34,7 +37,13 @@ class RootPage extends StatefulWidget {
 }
 
 class _RootPageState extends State<RootPage> {
+  // Fixed height of the demo / error banner strip inside the floating header.
+  static const double _bannerHeight = 26;
+
   final PageController _pages = PageController();
+
+  /// Set once a pull past 概览's left edge has opened 设置 (so one drag opens it only once).
+  bool _pulledSettings = false;
   final ScrollController _tabScroll = ScrollController();
   final List<GlobalKey> _tabKeys = [for (final _ in CentwisePage.values) GlobalKey()];
 
@@ -91,6 +100,7 @@ class _RootPageState extends State<RootPage> {
   }
 
   void _go(CentwisePage page) {
+    if (page != _page) HapticFeedback.selectionClick();
     setState(() => _page = page);
     _pages.animateToPage(page.index, duration: IOSMotion.smoothCurve.duration, curve: IOSMotion.smoothCurve);
     _revealTab(page);
@@ -109,57 +119,108 @@ class _RootPageState extends State<RootPage> {
 
   void _openSettings() {
     final store = StoreScope.read(context);
-    showCwSheet<void>(context, (_) => StoreScope(store: store, child: const SettingsSheet()));
+    showCwSheet<void>(context, (context) => StoreScope(store: store, child: const _SwipeLeftToClose(child: SettingsSheet())));
+  }
+
+  /// Swiping right on 概览 (pulling past its left edge, where there is no page) opens 设置.
+  bool _onPagesScroll(ScrollNotification n) {
+    if (n.depth != 0) return false;
+    if (n is ScrollUpdateNotification && n.dragDetails != null && !_pulledSettings && n.metrics.pixels < -56) {
+      _pulledSettings = true;
+      HapticFeedback.selectionClick();
+      _openSettings();
+    } else if (n is ScrollEndNotification) {
+      _pulledSettings = false;
+    }
+    return false;
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => _buildPage(context);
+
+  Widget _buildPage(BuildContext context) {
     final store = StoreScope.of(context);
     final p = Palette.of(context);
     final top = MediaQuery.paddingOf(context).top;
     final bottom = MediaQuery.paddingOf(context).bottom;
+    // The floating header block (status pad + demo banner + title row + tabs) overlays the pages:
+    // pages reserve this much top padding (HeaderInset) and scroll up behind its frosted backdrop.
+    final banner = store.isDemo || store.loadingFailed;
+    final headerInset = top + (banner ? _bannerHeight : 0) + 56 + 46;
     return Scaffold(
       backgroundColor: p.canvas,
       body: Stack(children: [
-        // Plain header: the canvas runs straight up under the title and tabs.
+        Positioned.fill(
+          child: HeaderInset(
+            height: headerInset,
+            child: NotificationListener<ScrollNotification>(
+              onNotification: _onPagesScroll,
+              child: PageView(
+              controller: _pages,
+              onPageChanged: (index) {
+                setState(() => _page = CentwisePage.values[index]);
+                _revealTab(_page);
+              },
+              children: [
+                DashboardPage(onShowTransactions: () => _go(CentwisePage.transactions), onNewEntry: _newEntry),
+                // Same order as CentwisePage: the page index is the tab index.
+                const SubscriptionsPage(),
+                const CategoriesPage(),
+                TransactionsPage(searchRequest: _searchRequest),
+              ],
+            ),
+            ),
+          ),
+        ),
+        // Transition wash under the tabs: softens the frost boundary between the header and the page.
+        Positioned(
+          left: 0,
+          right: 0,
+          top: headerInset,
+          height: 30,
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [p.canvas.withValues(alpha: 0.5), p.canvas.withValues(alpha: 0)],
+                ),
+              ),
+            ),
+          ),
+        ),
+        // Floating header, iOS Settings style: over the plain canvas at rest it reads as before, and
+        // once pages scroll behind it their content shows through blurred (backdrop filter) + washed.
         Positioned(
           left: 0,
           right: 0,
           top: 0,
-          height: 320 + top,
-          child: DecoratedBox(decoration: BoxDecoration(gradient: p.headerGradient)),
-        ),
-        Column(children: [
-        SizedBox(height: top),
-        if (store.isDemo || store.loadingFailed)
-          Container(
-            width: double.infinity,
-            color: p.track,
-            padding: const EdgeInsets.symmetric(vertical: 5),
-            child: Text(
-              store.isDemo ? tr('预览模式 · 初始为演示数据 · 退出后不保存修改') : tr('账本读取失败 · 原文件已保留 · 写入已暂停'),
-              textAlign: TextAlign.center,
-              style: cw(12, weight: FontWeight.w500, color: p.muted),
+          child: ClipRect(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+              child: ColoredBox(
+                color: p.canvas.withValues(alpha: 0.62),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  SizedBox(height: top),
+                  if (banner)
+                    Container(
+                      height: _bannerHeight,
+                      width: double.infinity,
+                      color: p.track,
+                      alignment: Alignment.center,
+                      child: Text(
+                        store.isDemo ? tr('预览模式 · 初始为演示数据 · 退出后不保存修改') : tr('账本读取失败 · 原文件已保留 · 写入已暂停'),
+                        style: cw(12, weight: FontWeight.w500, color: p.muted),
+                      ),
+                    ),
+                  _header(),
+                  _tabs(),
+                ]),
+              ),
             ),
           ),
-        _header(),
-        _tabs(),
-        Expanded(
-          child: PageView(
-            controller: _pages,
-            onPageChanged: (index) {
-              setState(() => _page = CentwisePage.values[index]);
-              _revealTab(_page);
-            },
-            children: [
-              DashboardPage(onShowTransactions: () => _go(CentwisePage.transactions), onNewEntry: _newEntry),
-              const CategoriesPage(),
-              TransactionsPage(searchRequest: _searchRequest),
-              const AccountsPage(),
-            ],
-          ),
         ),
-        ]),
         // Bottom controls float over the pages (no solid bar): the period capsule is frosted glass so the
         // content shows through. Page lists end with [bottomControlsClearance] of padding, so the last
         // row can still scroll clear of them.
@@ -174,13 +235,17 @@ class _RootPageState extends State<RootPage> {
             const SizedBox(width: 12),
             Expanded(
               child: Center(
-                child: _page != CentwisePage.accounts
+                // 订阅 isn't tied to a period, so it has no time capsule.
+                child: _page != CentwisePage.subscriptions
                     ? const FittedBox(fit: BoxFit.scaleDown, child: PeriodCapsule())
                     : const SizedBox(height: 44),
               ),
             ),
             const SizedBox(width: 12),
-            FloatingCircleButton(icon: 'plus', label: tr('记一笔'), onTap: store.loadingFailed ? null : _newEntry),
+            // On 订阅 the ＋ adds a subscription; everywhere else it records a bill.
+            _page == CentwisePage.subscriptions
+                ? FloatingCircleButton(icon: 'plus', label: tr('新增订阅'), onTap: store.loadingFailed ? null : () => openSubscription(context))
+                : FloatingCircleButton(icon: 'plus', label: tr('记一笔'), onTap: store.loadingFailed ? null : _newEntry),
           ]),
         ),
         ),
@@ -193,12 +258,12 @@ class _RootPageState extends State<RootPage> {
     Widget button(String icon, String label, VoidCallback onTap, {double stroke = 1.75, double size = 22}) => Pressable(
           semanticLabel: label,
           onTap: onTap,
-          child: SizedBox(width: 40, height: 40, child: Center(child: LIcon(icon, size: size, color: p.ink, strokeWidth: stroke))),
+          child: SizedBox(width: 40, height: 40, child: Center(child: LIcon(icon, size: size, color: p.ink.withValues(alpha: 0.8), strokeWidth: stroke))),
         );
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
       child: Row(children: [
-        button('cog', tr('设置与备份'), _openSettings, stroke: 1.5, size: 24),
+        button('cog', tr('设置与备份'), _openSettings, stroke: 1.75, size: 24),
         Expanded(
           child: Semantics(
             header: true,
@@ -265,7 +330,7 @@ class ImportPreview extends StatelessWidget {
         store.cancelImport();
         Navigator.of(context).pop();
       },
-      body: ListView(padding: const EdgeInsets.all(24), children: [
+      body: ListView(clipBehavior: Clip.none, padding: const EdgeInsets.all(24), children: [
         Center(child: LIcon('file-down', size: 40, color: p.accent)),
         const SizedBox(height: 14),
         Text(tr('先核对，再导入'), textAlign: TextAlign.center, style: cw(24, weight: FontWeight.w700, color: p.ink)),
@@ -289,4 +354,43 @@ class ImportPreview extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// 设置 closes with a right-to-left swipe (the reverse of the swipe that opens it from 概览), and
+/// with a pull down: its list fills the sheet, so a downward drag would otherwise only bounce the
+/// list. Pulling the list down past its top closes the sheet instead.
+class _SwipeLeftToClose extends StatefulWidget {
+  const _SwipeLeftToClose({required this.child});
+  final Widget child;
+
+  @override
+  State<_SwipeLeftToClose> createState() => _SwipeLeftToCloseState();
+}
+
+class _SwipeLeftToCloseState extends State<_SwipeLeftToClose> {
+  double _dx = 0;
+  bool _closing = false;
+
+  void _close() {
+    if (_closing) return;
+    _closing = true;
+    HapticFeedback.selectionClick();
+    Navigator.of(context).maybePop();
+  }
+
+  @override
+  Widget build(BuildContext context) => NotificationListener<ScrollUpdateNotification>(
+        onNotification: (n) {
+          if (n.metrics.axis == Axis.vertical && n.dragDetails != null && n.metrics.pixels < -64) _close();
+          return false;
+        },
+        child: GestureDetector(
+          onHorizontalDragStart: (_) => _dx = 0,
+          onHorizontalDragUpdate: (d) => _dx += d.delta.dx,
+          onHorizontalDragEnd: (d) {
+            if (_dx < -70 || (d.primaryVelocity ?? 0) < -400) _close();
+          },
+          child: widget.child,
+        ),
+      );
 }

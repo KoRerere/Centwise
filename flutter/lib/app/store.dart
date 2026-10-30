@@ -218,6 +218,111 @@ class LedgerStore extends ChangeNotifier with WidgetsBindingObserver {
         }
       });
 
+  // MARK: Hidden default account
+
+  /// The account new bills are booked to: the first one that isn't archived. Accounts are no longer
+  /// shown in the app, so when there is none, a default one is added quietly in the ledger's currency.
+  /// Old entries keep the accounts they were booked to.
+  static String defaultAccountIn(Ledger ledger) {
+    for (final account in ledger.accounts) {
+      if (!account.archived) return account.id;
+    }
+    final account = Account(name: tr('日常账户'), currency: ledger.currency);
+    ledger.accounts.add(account);
+    return account.id;
+  }
+
+  /// [defaultAccountIn] for the live ledger, saving the new account when one had to be added.
+  /// Null when the ledger can't be written.
+  String? defaultAccountID() {
+    for (final account in _ledger.accounts) {
+      if (!account.archived) return account.id;
+    }
+    String? id;
+    return commit((ledger) => id = defaultAccountIn(ledger)) ? id : null;
+  }
+
+  // MARK: Subscriptions
+
+  static Subscription _subscriptionIn(Ledger ledger, String id) {
+    for (final s in ledger.subscriptions) {
+      if (s.id == id) return s;
+    }
+    throw LedgerError(tr('找不到这个订阅。'));
+  }
+
+  bool saveSubscription(Subscription subscription) => commit((ledger) {
+        final index = ledger.subscriptions.indexWhere((s) => s.id == subscription.id);
+        if (index >= 0) {
+          ledger.subscriptions[index] = subscription;
+        } else {
+          ledger.subscriptions.add(subscription);
+        }
+      });
+
+  /// Stops future charges. Bills already booked from it stay in the ledger.
+  bool cancelSubscription(String id) => commit((ledger) {
+        final s = _subscriptionIn(ledger, id);
+        s.cancelled = true;
+        s.cancelledAt = DateTime.now();
+      });
+
+  /// Starts a cancelled subscription again. If its next charge day has passed meanwhile, it moves on
+  /// to the first charge day from today; the missed ones are not booked.
+  bool resumeSubscription(String id) => commit((ledger) {
+        final s = _subscriptionIn(ledger, id);
+        s.cancelled = false;
+        s.cancelledAt = null;
+        final today = _dateOnly(DateTime.now());
+        for (var guard = 0; guard < 400 && s.nextDate.isBefore(today); guard++) {
+          s.nextDate = s.after(s.nextDate);
+        }
+      });
+
+  /// Confirms the charge that is due: books one expense on its charge day and moves the subscription
+  /// on to the next cycle, in one save. A day that was already booked is never booked again.
+  bool confirmSubscriptionCharge(String id) => commit((ledger) {
+        final s = _subscriptionIn(ledger, id);
+        final now = DateTime.now();
+        if (!s.isDue(now)) throw LedgerError(tr('这一期还没到扣费日期。'));
+        final key = dayKey(s.nextDate);
+        if (!s.charged.contains(key)) {
+          final day = s.nextDate;
+          ledger.entries.add(Entry(
+            kind: EntryKind.expense,
+            amount: s.amount,
+            // Today's charge gets the current time (so it lists with today's bills in order); an
+            // older one is booked at noon of its own charge day.
+            date: _dateOnly(now) == day ? now : DateTime(day.year, day.month, day.day, 12),
+            accountID: defaultAccountIn(ledger),
+            allocations: [Allocation(categoryID: _subscriptionCategoryIn(ledger, s), amount: s.amount)],
+            note: s.note.trim().isEmpty ? s.name : '${s.name} · ${s.note.trim()}',
+            payee: s.name,
+          ));
+          s.charged.add(key);
+        }
+        s.nextDate = s.after(s.nextDate);
+      });
+
+  /// Skips the due charge without booking anything (e.g. a free month), moving on to the next cycle.
+  bool skipSubscriptionCharge(String id) => commit((ledger) {
+        final s = _subscriptionIn(ledger, id);
+        if (!s.isDue(DateTime.now())) throw LedgerError(tr('这一期还没到扣费日期。'));
+        s.nextDate = s.after(s.nextDate);
+      });
+
+  /// The subscription's own expense category, or 其他 (added to [ledger] the first time) when it has
+  /// none or it was deleted.
+  static String _subscriptionCategoryIn(Ledger ledger, Subscription s) {
+    final own = s.categoryID == null ? null : ledger.categoryByID(s.categoryID!);
+    if (own != null && own.kind == EntryKind.expense) return own.id;
+    final other = _otherCategoryIn(ledger, EntryKind.expense);
+    if (other != null) return other.id;
+    final created = LedgerCategory(name: tr('其他'), kind: EntryKind.expense, symbol: 'ellipsis');
+    ledger.categories.add(created);
+    return created.id;
+  }
+
   void prepareImport(String path) {
     try {
       final lower = path.toLowerCase();
@@ -371,12 +476,14 @@ class LedgerStore extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Where an expense / income goes when no category is picked: the ledger's own "其他" category of
   /// that kind (any of the usual spellings), or null when there is none yet.
-  LedgerCategory? otherCategory(EntryKind kind) {
+  LedgerCategory? otherCategory(EntryKind kind) => _otherCategoryIn(_ledger, kind);
+
+  static LedgerCategory? _otherCategoryIn(Ledger ledger, EntryKind kind) {
     final names = kind == EntryKind.income
         ? ['其他收入', '其它收入', '其他', '其它', tr('其他收入'), tr('其他')]
         : ['其他', '其它', '其他支出', '其它支出', tr('其他')];
     for (final name in names) {
-      for (final category in _ledger.categories) {
+      for (final category in ledger.categories) {
         if (category.kind == kind && category.name.trim() == name) return category;
       }
     }

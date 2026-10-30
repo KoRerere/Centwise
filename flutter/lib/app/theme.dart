@@ -1,12 +1,13 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../core/models.dart';
 
-/// Centwise visual language: monochrome minimal (reference: Trackly 得意記 onboarding).
-/// Black and white do the work; hierarchy comes from size and weight, not colour. A plain white
-/// header (no colour wash), white cards with a hairline border (no shadow), near-black ink, black
-/// capsule buttons. Colour is kept only where it carries meaning: income green, over-budget red,
-/// category emoji and the category chart slices.
+/// Centwise visual language: monochrome, following iOS conventions (reference: Trackly 得意記 for the
+/// black-and-white look, Apple's own apps for structure). iOS "inset grouped" surfaces: a light grey
+/// systemGroupedBackground canvas with plain white cards (no border, no shadow), near-black ink, iOS
+/// secondary-label grey, hairline separators and black capsule buttons. Colour is kept only where it
+/// carries meaning: income green, over-budget red, category emoji and the category chart slices.
 class Palette {
   const Palette({
     required this.brand,
@@ -50,12 +51,13 @@ class Palette {
     onBrand: const Color(0xFFFFFFFF),
     brandDeep: const Color(0xFF0A0A0A),
     accent: const Color(0xFF0A0A0A),
-    canvas: const Color(0xFFFFFFFF),
+    // iOS systemGroupedBackground / secondarySystemGroupedBackground, separator and systemGray5.
+    canvas: const Color(0xFFF2F2F7),
     card: const Color(0xFFFFFFFF),
-    cardStroke: const Color(0xFFE8E8EA),
+    cardStroke: const Color(0xFFD9D9DE),
     ink: const Color(0xFF0A0A0A),
-    muted: const Color(0xFF8E8E93),
-    track: const Color(0xFFF0F0F2),
+    muted: const Color(0xFF8A8A8E),
+    track: const Color(0xFFE5E5EA),
     income: _rgb(0.15, 0.60, 0.27),
     under: _rgb(0.25, 0.70, 0.30),
     warning: _rgb(0.95, 0.60, 0.16),
@@ -68,12 +70,13 @@ class Palette {
     onBrand: const Color(0xFF0A0A0A),
     brandDeep: const Color(0xFFF5F5F5),
     accent: const Color(0xFFF5F5F5),
+    // iOS dark grouped colours: black canvas, #1C1C1E cards, #38383A separators, systemGray5.
     canvas: const Color(0xFF000000),
-    card: const Color(0xFF111111),
-    cardStroke: const Color(0xFF26262A),
+    card: const Color(0xFF1C1C1E),
+    cardStroke: const Color(0xFF38383A),
     ink: const Color(0xFFF5F5F5),
-    muted: const Color(0xFF8E8E93),
-    track: const Color(0xFF1F1F22),
+    muted: const Color(0xFF8D8D93),
+    track: const Color(0xFF2C2C2E),
     income: _rgb(0.36, 0.84, 0.46),
     under: _rgb(0.36, 0.84, 0.46),
     warning: _rgb(1.00, 0.68, 0.28),
@@ -105,19 +108,19 @@ Color categoryTint(String id) {
   return categoryPalette[seed % categoryPalette.length];
 }
 
-/// Apple's iOS system colours (Human Interface Guidelines), light-mode values. Red is left out: it means
-/// "over budget" here.
+/// Apple's iOS system colours (Human Interface Guidelines), light-mode values, without the blues (the
+/// app is monochrome; blue read as the old brand colour) and without red (it means "over budget").
 const List<Color> categoryPalette = [
-  Color(0xFF007AFF), // systemBlue
   Color(0xFFFF9500), // systemOrange
   Color(0xFF34C759), // systemGreen
   Color(0xFFAF52DE), // systemPurple
-  Color(0xFF30B0C7), // systemTeal
   Color(0xFFFF2D55), // systemPink
-  Color(0xFF5856D6), // systemIndigo
   Color(0xFFFFCC00), // systemYellow
   Color(0xFF00C7BE), // systemMint
-  Color(0xFF32ADE6), // systemCyan
+  Color(0xFFA2845E), // systemBrown
+  Color(0xFF8E8E93), // systemGray
+  Color(0xFF636366), // systemGray2 (dark)
+  Color(0xFFFF6482), // pink, lighter
 ];
 
 /// Nunito is kept for the Centwise logo and money amounts only; everything else uses the system font
@@ -139,7 +142,15 @@ ThemeData buildTheme(Brightness brightness) {
     scaffoldBackgroundColor: palette.canvas,
     splashFactory: NoSplash.splashFactory,
     highlightColor: Colors.transparent,
-    dividerColor: palette.track,
+    dividerColor: palette.cardStroke,
+    // iOS everywhere: rubber-band scrolling and push transitions that slide in from the right (with the
+    // edge-swipe back gesture), on the Mac preview too.
+    pageTransitionsTheme: const PageTransitionsTheme(builders: {
+      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+    }),
+    cupertinoOverrideTheme: CupertinoThemeData(primaryColor: palette.accent, brightness: brightness),
   );
   return base.copyWith(
     textTheme: base.textTheme.apply(bodyColor: palette.ink, displayColor: palette.ink),
@@ -165,6 +176,22 @@ ThemeData buildTheme(Brightness brightness) {
   );
 }
 
+/// iOS text styles (Dynamic Type "Large" sizes), so every screen draws from one scale instead of
+/// one-off sizes: use these with [cw], e.g. cw(IOSText.body).
+abstract final class IOSText {
+  static const double largeTitle = 34;
+  static const double title1 = 28;
+  static const double title2 = 22;
+  static const double title3 = 20;
+  static const double headline = 17; // semibold
+  static const double body = 17;
+  static const double callout = 16;
+  static const double subheadline = 15;
+  static const double footnote = 13;
+  static const double caption1 = 12;
+  static const double caption2 = 11;
+}
+
 /// Shorthand for the rounded text style used everywhere.
 TextStyle cw(double size, {FontWeight weight = FontWeight.w400, Color? color, double? spacing, double? height, bool brand = false}) =>
     TextStyle(
@@ -175,6 +202,26 @@ TextStyle cw(double size, {FontWeight weight = FontWeight.w400, Color? color, do
         fontSize: size,
         fontWeight: weight,
         color: color,
-        letterSpacing: spacing,
+        letterSpacing: spacing ?? (brand ? null : iosTracking(size)),
         height: height,
         fontFeatures: const [FontFeature.tabularFigures()]);
+
+/// Apple's system-font tracking for a point size (HIG type scale: 17 pt → −0.43, 13 pt → −0.08,
+/// 28 pt → +0.38 …). iOS applies it to all system text, Chinese included — that is why 17 pt labels in
+/// Settings sit tighter than plain 17 pt PingFang. Flutter doesn't do this on its own.
+double iosTracking(double size) {
+  const table = <(double, double)>[
+    (11, 0.06), (12, 0), (13, -0.08), (14, -0.15), (15, -0.23), (16, -0.31), (17, -0.43),
+    (20, -0.45), (22, -0.26), (28, 0.38), (34, 0.40),
+  ];
+  if (size <= table.first.$1) return table.first.$2;
+  if (size >= table.last.$1) return table.last.$2;
+  for (var i = 1; i < table.length; i++) {
+    final (s1, t1) = table[i];
+    if (size <= s1) {
+      final (s0, t0) = table[i - 1];
+      return t0 + (t1 - t0) * (size - s0) / (s1 - s0);
+    }
+  }
+  return 0;
+}

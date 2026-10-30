@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:cupertino_native_better/cupertino_native_better.dart' show CNTabBarRouteObserver;
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -62,13 +64,30 @@ class CentwiseApp extends StatelessWidget {
         );
         if (!Platform.isMacOS) return overlay;
         // The Mac build is a phone-layout preview: keep the content at phone width.
-        final palette = Palette.of(context);
         return ColoredBox(
-          color: palette.track,
+          color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF111111) : const Color(0xFFDCDCE1),
           child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 430), child: overlay)),
         );
       },
+      // iOS scrolling on every platform: bounce at the edges, no Material overscroll glow.
+      scrollBehavior: const _IOSScrollBehavior(),
+      // Lets the native iOS controls (cupertino_native_better) know when sheets and dialogs cover them.
+      navigatorObservers: [CNTabBarRouteObserver()],
       home: const RootPage(),
     );
   }
+}
+
+class _IOSScrollBehavior extends MaterialScrollBehavior {
+  const _IOSScrollBehavior();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) => const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
+
+  @override
+  Widget buildOverscrollIndicator(BuildContext context, Widget child, ScrollableDetails details) => child;
+
+  // The Mac build previews the phone: let a mouse drag scroll and swipe pages like a finger would.
+  @override
+  Set<PointerDeviceKind> get dragDevices => {...super.dragDevices, PointerDeviceKind.mouse};
 }
