@@ -87,8 +87,11 @@ enum IOSText {
 
 extension Font {
     /// The app's text style: San Francisco (PingFang for Chinese) or, for the logo and money amounts,
-    /// Nunito. Monospaced digits so amounts don't jitter.
-    static func cw(_ size: CGFloat, _ weight: Font.Weight = .regular, brand: Bool = false) -> Font {
+    /// Nunito. Money gets tabular (equal-width) digits so amounts line up and don't jitter; other text
+    /// keeps proportional digits, because tabular ones make "11月15日" look letter-spaced.
+    /// `tabular` defaults to `brand`; pass true for a money amount set in the system font.
+    static func cw(_ size: CGFloat, _ weight: Font.Weight = .regular, brand: Bool = false, tabular: Bool? = nil) -> Font {
+        let font: Font
         if brand {
             let name: String
             switch weight {
@@ -98,9 +101,11 @@ extension Font {
             case .medium: name = "Nunito-Medium"
             default: name = "Nunito-Regular"
             }
-            return .custom(name, fixedSize: size).monospacedDigit()
+            font = .custom(name, fixedSize: size)
+        } else {
+            font = .system(size: size, weight: weight)
         }
-        return .system(size: size, weight: weight).monospacedDigit()
+        return tabular ?? brand ? font.monospacedDigit() : font
     }
 }
 

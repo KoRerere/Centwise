@@ -371,19 +371,47 @@ struct Ledger {
         ledger.accounts.append(Account(id: "bank", name: tr("储蓄账户"), openingBalance: 2_400_000))
         ledger.budgets = [Budget(limit: 600000), Budget(categoryID: "food", limit: 150000)]
         let p = Cal.parts(now)
-        let data: [(Int, String, Int, String)] = [
-            (0, "salary", 1_280_000, tr("月度工资")), (1, "food", 3600, tr("周末早餐")), (2, "transport", 2800, tr("通勤打车")),
-            (3, "shopping", 25900, tr("换季衣物")), (4, "food", 12600, tr("和朋友吃晚饭")), (5, "home", 18900, tr("生活用品")),
-            (6, "fun", 6800, tr("看一场电影")), (7, "food", 2800, tr("咖啡与面包")),
-        ]
-        ledger.entries = data.map { day, category, amount, note in
-            Entry(kind: category == "salary" ? .income : .expense, amount: amount, date: Cal.date(p.year, p.month, 1 + day, 12),
-                  accountID: category == "salary" ? "bank" : "cash", allocations: [Allocation(categoryID: category, amount: amount)], note: note)
+        func add(daysAgo: Int, _ hour: Int, _ minute: Int, _ category: String, _ amount: Int, _ note: String) {
+            let income = category == "salary" || category == "bonus"
+            ledger.entries.append(Entry(kind: income ? .income : .expense, amount: amount,
+                                        date: Cal.date(p.year, p.month, p.day - daysAgo, hour, minute),
+                                        accountID: income ? "bank" : "cash",
+                                        allocations: [Allocation(categoryID: category, amount: amount)], note: note))
         }
-        ledger.entries.append(Entry(kind: .expense, amount: 3200, date: Cal.date(p.year, p.month, p.day, 8, 30), accountID: "cash",
-                                    allocations: [Allocation(categoryID: "food", amount: 3200)], note: tr("早餐")))
-        ledger.entries.append(Entry(kind: .expense, amount: 600, date: Cal.date(p.year, p.month, p.day, 9, 10), accountID: "cash",
-                                    allocations: [Allocation(categoryID: "transport", amount: 600)], note: tr("地铁")))
+        // Today and the days just before it, so the day, month and recent lists all have something.
+        add(daysAgo: 0, 8, 30, "food", 3200, tr("早餐"))
+        add(daysAgo: 0, 9, 10, "transport", 600, tr("地铁"))
+        add(daysAgo: 0, 12, 20, "food", 4600, tr("午餐"))
+        add(daysAgo: 0, 15, 5, "food", 2800, tr("咖啡与面包"))
+        add(daysAgo: 1, 8, 40, "transport", 600, tr("地铁"))
+        add(daysAgo: 1, 12, 30, "food", 3800, tr("午餐"))
+        add(daysAgo: 1, 19, 45, "shopping", 16800, tr("超市采购"))
+        add(daysAgo: 2, 13, 0, "food", 5200, tr("外卖"))
+        add(daysAgo: 2, 20, 30, "fun", 6800, tr("看一场电影"))
+        add(daysAgo: 3, 9, 0, "transport", 2800, tr("通勤打车"))
+        add(daysAgo: 3, 18, 50, "food", 12600, tr("和朋友吃晚饭"))
+        add(daysAgo: 4, 10, 15, "home", 18900, tr("生活用品"))
+        add(daysAgo: 5, 9, 30, "food", 3600, tr("周末早餐"))
+        add(daysAgo: 5, 16, 0, "shopping", 25900, tr("换季衣物"))
+        add(daysAgo: 6, 11, 0, "home", 23600, tr("水电费"))
+        add(daysAgo: 7, 14, 20, "other", 6000, tr("理发"))
+        add(daysAgo: 8, 10, 0, "salary", 1_280_000, tr("月度工资"))
+        // The five months before, lighter, so the trend chart and the year view are not empty.
+        let months: [(food: Int, shopping: Int, home: Int, fun: Int, transport: Int, bonus: Int)] = [
+            (118_000, 46_000, 52_000, 21_000, 16_800, 0), (132_500, 89_900, 48_600, 12_000, 19_200, 300_000),
+            (104_300, 23_500, 61_200, 35_800, 14_400, 0), (141_000, 56_700, 47_900, 9_900, 21_600, 0),
+            (97_600, 31_200, 55_300, 26_400, 15_000, 120_000),
+        ]
+        for (i, m) in months.enumerated() {
+            let ago = (i + 1) * 30 + p.day
+            add(daysAgo: ago - 5, 10, 0, "salary", 1_280_000, tr("月度工资"))
+            add(daysAgo: ago - 9, 12, 30, "food", m.food, tr("午餐"))
+            add(daysAgo: ago - 13, 16, 0, "shopping", m.shopping, tr("超市采购"))
+            add(daysAgo: ago - 17, 11, 0, "home", m.home, tr("水电费"))
+            add(daysAgo: ago - 21, 20, 30, "fun", m.fun, tr("看一场电影"))
+            add(daysAgo: ago - 25, 9, 0, "transport", m.transport, tr("通勤打车"))
+            if m.bonus > 0 { add(daysAgo: ago - 15, 10, 0, "bonus", m.bonus, tr("季度奖金")) }
+        }
         ledger.subscriptions = [
             Subscription(name: tr("视频会员"), amount: 2500, nextDate: Cal.date(p.year, p.month, p.day + 5), categoryID: "fun"),
             Subscription(name: tr("音乐会员"), amount: 1500, nextDate: Cal.date(p.year, p.month, p.day), categoryID: "fun"),

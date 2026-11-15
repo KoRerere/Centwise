@@ -264,7 +264,8 @@ struct RecentCard: View {
                 } else {
                     VStack(spacing: 0) {
                         ForEach(groupedByDay(Array(entries.prefix(6))), id: \.0) { day, items in
-                            DayHeadingView(day: day).padding(.top, 10).padding(.bottom, 2)
+                            // One day's bills need no day label: the period switcher already says which day.
+                            if store.period != .day { DayHeadingView(day: day).padding(.top, 10).padding(.bottom, 2) }
                             ForEach(Array(items.enumerated()), id: \.element.id) { i, entry in
                                 if i > 0 { RowDivider() }
                                 EntryRow(entry: entry, onTap: { editing = entry })

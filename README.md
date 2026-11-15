@@ -1,7 +1,5 @@
 # Centwise
 
-> 2026-10-13：已迁移出 **Flutter 版**，在 [`flutter/`](flutter/README.md) 文件夹（iPhone + Mac 预览，新 Bundle ID `com.koray.centwise`，从零开始，旧数据通过备份导入）。下面是原 SwiftUI 版的说明，代码保留未删。
-
 一份可以自己修改的原生 iPhone 记账应用，附共用界面与账本核心的 Mac 预览版。独立实现，不使用 Money Pro 的代码、品牌或图片。当前是 **0.1 自用 MVP**，不是 Money Pro 全功能替代，也未上架。
 
 ## 品牌与保留的旧标识

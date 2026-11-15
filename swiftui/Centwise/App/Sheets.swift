@@ -30,38 +30,150 @@ enum SheetStyle {
     case draggable
 }
 
-/// Root of every sheet's content: tracks depth, sets the sheet look and hosts store alerts.
+/// Dimming behind a sheet; the presenter fades it with the sheet's slide.
+@Observable final class PanelDim {
+    var shown = false
+}
+
+/// A sheet's content can ask to confirm before a pull closes it (see `GuardedSheetDismiss`).
+@Observable final class PanelCloseGuard {
+    @ObservationIgnored var onAttempt: (() -> Void)?
+}
+
+/// Height of the on-screen keyboard, so a sheet can keep its place and pad its content instead.
+@Observable final class KeyboardObserver {
+    static let shared = KeyboardObserver()
+    private(set) var height: CGFloat = 0
+
+    private init() {
+        let center = NotificationCenter.default
+        center.addObserver(forName: UIResponder.keyboardWillChangeFrameNotification, object: nil, queue: .main) { [weak self] note in
+            guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+            let value = max(0, UIScreen.main.bounds.height - frame.minY)
+            withAnimation(.easeOut(duration: 0.25)) { self?.height = value }
+        }
+        center.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { [weak self] _ in
+            withAnimation(.easeOut(duration: 0.25)) { self?.height = 0 }
+        }
+    }
+}
+
+private struct PanelCloseKey: EnvironmentKey { static let defaultValue: (() -> Void)? = nil }
+extension EnvironmentValues {
+    /// Closes the enclosing sheet the way a pull down does (asking its guard first).
+    var panelClose: (() -> Void)? {
+        get { self[PanelCloseKey.self] }
+        set { self[PanelCloseKey.self] = newValue }
+    }
+}
+
+/// Root of every sheet: a panel attached to the screen's bottom and side edges, inside a clear
+/// full-screen cover (see `PanelPresenter`). It tracks depth, sets the sheet look and hosts store
+/// alerts. Without a `height` the panel is as tall as a system sheet at 94 %.
 struct SheetHost<Content: View>: View {
     var height: CGFloat?
     var style: SheetStyle = .glass
+    var dim: PanelDim?
     @ViewBuilder var content: () -> Content
     @Environment(\.sheetDepth) private var parentDepth
     @Environment(LedgerStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var drag: CGFloat = 0
+    @State private var closeGuard = PanelCloseGuard()
+
+    private func attemptClose() {
+        if let attempt = closeGuard.onAttempt { attempt() } else { dismiss() }
+    }
+
+    private var panel: some View {
+        let fill = style == .card ? Color.cwCard : Color.cwSheet
+        let radius: CGFloat = style == .card ? 18 : 32
+        let shape = UnevenRoundedRectangle(topLeadingRadius: radius, topTrailingRadius: radius, style: .continuous)
+        return GeometryReader { geo in
+            let screen = geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom
+            // Where a system sheet's 94 % detent puts its top edge.
+            let full = 8 + 0.94 * (screen - geo.safeAreaInsets.top - 30) - geo.safeAreaInsets.bottom
+            let panelHeight = min(height ?? full, full)
+            VStack(spacing: 0) {
+                Color.clear.contentShape(Rectangle()).onTapGesture { if height != nil { attemptClose() } }.accessibilityHidden(true)
+                content()
+                    .safeAreaPadding(.bottom, max(0, KeyboardObserver.shared.height - geo.safeAreaInsets.bottom))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: panelHeight)
+                    .background(fill)
+                    // Rounded top only: the content's own bottom bar may run into the home-indicator strip.
+                    .mask(alignment: .top) { shape.frame(height: panelHeight + 600) }
+                    // Runs past the bottom so that strip stays filled, also mid-drag.
+                    .background(alignment: .top) { shape.fill(fill).frame(height: panelHeight + 600) }
+                    .offset(y: drag)
+                    .gesture(DragGesture(minimumDistance: 12)
+                        .onChanged { drag = $0.translation.height > 0 ? $0.translation.height : $0.translation.height / 8 }
+                        .onEnded { g in
+                            let far = g.translation.height > panelHeight / 3 || g.predictedEndTranslation.height - g.translation.height > 300
+                            if far && closeGuard.onAttempt == nil {
+                                dismiss()
+                            } else {
+                                withAnimation(IOSMotion.snappy) { drag = 0 }
+                                if far { attemptClose() }
+                            }
+                        })
+            }
+        }
+        // The panel keeps its place when the keyboard shows; its content is padded instead.
+        .ignoresSafeArea(.keyboard)
+        // Taller than the screen so it already covers everything while the cover slides in.
+        .background(alignment: .bottom) {
+            Color.black.opacity(dim?.shown == true ? 0.24 : 0).frame(height: 4000).offset(y: 200).allowsHitTesting(false)
+        }
+    }
 
     var body: some View {
         let depth = parentDepth + 1
-        content()
+        panel
+            .presentationBackground(.clear)
             .environment(\.sheetDepth, depth)
+            .environment(\.panelClose, attemptClose)
+            .environment(closeGuard)
             .modifier(StoreOverlays(depth: depth))
-            .presentationDetents(height.map { [.height($0)] } ?? [.fraction(0.94)])
-            .presentationBackground(style == .card ? Color.cwCard : (style == .draggable ? Color.clear : Color.cwSheet))
-            .presentationCornerRadius(style == .card ? 18 : 32)
-            .presentationDragIndicator(.hidden)
             .preferredColorScheme(store.colorScheme)
             .onAppear { PresentationTracker.shared.top = depth }
             .onDisappear { PresentationTracker.shared.top = depth - 1 }
     }
 }
 
+/// Presents a sheet as a panel attached to the screen's edges. iOS 26 floats every system sheet
+/// shorter than `.large` away from the edges, so sheets use a clear full-screen cover instead.
+private struct PanelPresenter<Item: Identifiable, PanelContent: View>: ViewModifier {
+    @Binding var item: Item?
+    let height: (Item) -> CGFloat?
+    let style: SheetStyle
+    @ViewBuilder let panel: (Item) -> PanelContent
+    @State private var dim = PanelDim()
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: item != nil, initial: true) { _, on in
+                withAnimation(.easeOut(duration: on ? 0.3 : 0.22)) { dim.shown = on }
+            }
+            .fullScreenCover(item: $item) { value in
+                SheetHost(height: height(value), style: style, dim: dim) { panel(value) }
+            }
+    }
+}
+
+private struct PanelFlag: Identifiable { let id = 0 }
+
 extension View {
     func cwSheet<Content: View>(isPresented: Binding<Bool>, height: CGFloat? = nil, style: SheetStyle = .glass,
                                 @ViewBuilder content: @escaping () -> Content) -> some View {
-        sheet(isPresented: isPresented) { SheetHost(height: height, style: style, content: content) }
+        modifier(PanelPresenter(item: Binding<PanelFlag?>(get: { isPresented.wrappedValue ? PanelFlag() : nil },
+                                                          set: { if $0 == nil { isPresented.wrappedValue = false } }),
+                                height: { _ in height }, style: style, panel: { _ in content() }))
     }
 
     func cwSheet<Item: Identifiable, Content: View>(item: Binding<Item?>, height: ((Item) -> CGFloat?)? = nil, style: SheetStyle = .glass,
                                                     @ViewBuilder content: @escaping (Item) -> Content) -> some View {
-        sheet(item: item) { value in SheetHost(height: height?(value), style: style) { content(value) } }
+        modifier(PanelPresenter(item: item, height: { height?($0) }, style: style, panel: content))
     }
 }
 
@@ -79,8 +191,8 @@ struct StoreOverlays: ViewModifier {
                 return CwAlert(id: "error|\(error)", title: tr("操作未完成"), message: error,
                                actions: [CwAlertAction(label: tr("知道了"), prominent: true, action: { store.error = nil })])
             }, set: { if $0 == nil && isTop { store.error = nil } }))
-            .sheet(isPresented: Binding(get: { isTop && store.pendingImport != nil }, set: { if !$0 { store.cancelImport() } })) {
-                SheetHost { ImportPreview() }
+            .cwSheet(isPresented: Binding(get: { isTop && store.pendingImport != nil }, set: { if !$0 { store.cancelImport() } })) {
+                ImportPreview()
             }
     }
 }
@@ -220,10 +332,18 @@ extension EnvironmentValues {
 
 private struct ReportsSheetScroll: ViewModifier {
     @Environment(\.sheetScroll) private var reporter
+    @Environment(\.panelClose) private var close
+    @State private var pull: CGFloat = 0
     func body(content: Content) -> some View {
-        content.onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y + $0.contentInsets.top } action: { _, y in
-            reporter?.report(y)
-        }
+        content
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y + $0.contentInsets.top } action: { _, y in
+                reporter?.report(y)
+                if y < 0 || pull != 0 { pull = max(0, -y) }
+            }
+            // Like a system sheet: a long pull down past the top closes it.
+            .onScrollPhaseChange { old, phase in
+                if old == .interacting && phase != .interacting && pull > 110 { close?() }
+            }
     }
 }
 
@@ -665,65 +785,14 @@ extension View {
 
 // MARK: Pull down to close, guarded (记一笔 / 订阅)
 
-/// Keeps the sheet from closing on an ordinary swipe: the system lets it rubber-band and, when the
-/// pull is long enough, reports an attempt to close — `onAttempt` then closes it (or asks to discard
-/// typed input first). Works from anywhere on the sheet, including pulling down at the top of the list.
+/// Keeps the sheet from closing on an ordinary pull: a long pull down (on the sheet, or past the top
+/// of its list) calls `onAttempt`, which then closes it or asks to discard typed input first.
 struct GuardedSheetDismiss: ViewModifier {
     let onAttempt: () -> Void
+    @Environment(PanelCloseGuard.self) private var closeGuard: PanelCloseGuard?
     func body(content: Content) -> some View {
         content
-            .interactiveDismissDisabled(true)
-            .background(DismissAttemptBridge(onAttempt: onAttempt).frame(width: 0, height: 0))
-    }
-}
-
-private struct DismissAttemptBridge: UIViewControllerRepresentable {
-    let onAttempt: () -> Void
-    func makeUIViewController(context: Context) -> BridgeController { BridgeController() }
-    func updateUIViewController(_ controller: BridgeController, context: Context) {
-        controller.onAttempt = onAttempt
-        controller.install()
-    }
-
-    final class BridgeController: UIViewController {
-        var onAttempt: () -> Void = {}
-        private var proxy: DelegateProxy?
-
-        override func viewDidAppear(_ animated: Bool) {
-            super.viewDidAppear(animated)
-            install()
-        }
-
-        func install() {
-            // The presented controller is the top of this view controller's parent chain.
-            var root: UIViewController = self
-            while let p = root.parent { root = p }
-            guard let pc = root.presentationController else { return }
-            if let proxy, pc.delegate === proxy { proxy.onAttempt = { [weak self] in self?.onAttempt() }; return }
-            let p = DelegateProxy(original: pc.delegate)
-            p.onAttempt = { [weak self] in self?.onAttempt() }
-            proxy = p
-            pc.delegate = p
-        }
-    }
-
-    /// Forwards everything to SwiftUI's own delegate, and reports attempts to close.
-    final class DelegateProxy: NSObject, UIAdaptivePresentationControllerDelegate {
-        weak var original: UIAdaptivePresentationControllerDelegate?
-        var onAttempt: () -> Void = {}
-        init(original: UIAdaptivePresentationControllerDelegate?) { self.original = original }
-
-        func presentationControllerDidAttemptToDismiss(_ pc: UIPresentationController) {
-            original?.presentationControllerDidAttemptToDismiss?(pc)
-            onAttempt()
-        }
-
-        override func responds(to selector: Selector!) -> Bool {
-            super.responds(to: selector) || (original?.responds(to: selector) ?? false)
-        }
-
-        override func forwardingTarget(for selector: Selector!) -> Any? {
-            original?.responds(to: selector) == true ? original : super.forwardingTarget(for: selector)
-        }
+            .onAppear { closeGuard?.onAttempt = onAttempt }
+            .onDisappear { closeGuard?.onAttempt = nil }
     }
 }

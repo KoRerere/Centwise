@@ -96,6 +96,34 @@ struct LucideIcon: View {
     }
 }
 
+extension Font {
+    /// The system font for emoji at `size`.
+    ///
+    /// Some simulator runtimes (iOS 26.3 here) look for the emoji font at a path the runtime does not
+    /// ship, so every emoji draws as a boxed "?". In the simulator only, name the emoji font that the
+    /// runtime does ship; devices keep the plain system font.
+    static func emoji(size: CGFloat) -> Font {
+        #if targetEnvironment(simulator)
+        if let descriptor = SimulatorEmojiFont.descriptor { return Font(CTFontCreateWithFontDescriptor(descriptor, size, nil)) }
+        #endif
+        return .system(size: size)
+    }
+}
+
+#if targetEnvironment(simulator)
+private enum SimulatorEmojiFont {
+    /// The emoji font read straight from a file: the runtime's own copy, else the Mac's.
+    static let descriptor: CTFontDescriptor? = {
+        let root = ProcessInfo.processInfo.environment["SIMULATOR_ROOT"] ?? ""
+        for path in [root + "/System/Library/Fonts/CoreAddition/AppleColorEmoji-160px.ttc", "/System/Library/Fonts/Apple Color Emoji.ttc"] {
+            let url = URL(fileURLWithPath: path) as CFURL
+            if let all = CTFontManagerCreateFontDescriptorsFromURL(url) as? [CTFontDescriptor], let first = all.first { return first }
+        }
+        return nil
+    }()
+}
+#endif
+
 /// A category emoji drawn with Apple's own emoji, centred in a square box.
 struct EmojiIcon: View {
     let name: String
@@ -105,7 +133,7 @@ struct EmojiIcon: View {
 
     var body: some View {
         Text(emojiFor(name))
-            .font(.system(size: size * 0.98))
+            .font(.emoji(size: size * 0.98))
             .lineLimit(1)
             .fixedSize()
             .frame(width: size * 1.15, height: size * 1.15)

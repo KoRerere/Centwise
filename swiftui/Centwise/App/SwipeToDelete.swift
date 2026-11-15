@@ -47,7 +47,7 @@ struct LeftSwipePan: UIGestureRecognizerRepresentable {
     }
 }
 
-/// Swipe left to reveal a red 删除 button (iOS Mail style, with a rubber band past it). Tapping it
+/// Swipe left to reveal a round glass delete button (with a rubber band past it). Tapping it
 /// turns the row into dust that blows away to the right, then the row collapses.
 struct SwipeToDelete<Content: View>: View {
     let id: String
@@ -55,7 +55,7 @@ struct SwipeToDelete<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     private static var gap: CGFloat { 12 }
-    private static var buttonWidth: CGFloat { 76 }
+    private static var buttonWidth: CGFloat { 44 }
     private static var actionWidth: CGFloat { gap + buttonWidth }
     private static var maxStretch: CGFloat { 36 }
 
@@ -92,23 +92,6 @@ struct SwipeToDelete<Content: View>: View {
         let squeeze = min(reveal, Self.actionWidth + Self.maxStretch)
         let slide = reveal - squeeze
         return ZStack(alignment: .trailing) {
-            if reveal > 0 {
-                Button(action: delete) {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.cwOver)
-                        .overlay {
-                            if reveal > 60 {
-                                VStack(spacing: 2) {
-                                    LIcon("trash", size: 18, color: .white)
-                                    Text(tr("删除")).cw(IOSText.footnote, .medium, color: .white)
-                                }
-                            }
-                        }
-                        .padding(.leading, min(Self.gap, reveal))
-                        .frame(width: reveal)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(tr("删除"))
-            }
             content()
                 .background(GeometryReader { geo in Color.clear.onAppear { rowFrame = geo.frame(in: .global) }
                     .onChange(of: geo.frame(in: .global)) { _, f in rowFrame = f } })
@@ -120,8 +103,24 @@ struct SwipeToDelete<Content: View>: View {
                             .onTapGesture { close() }
                     }
                 }
+            if reveal > 0 {
+                Button(action: delete) {
+                    // A round glass button that grows in as the row uncovers it.
+                    let shown = min(1, max(0, (reveal - Self.gap) / Self.buttonWidth))
+                    LIcon("trash", size: 20, color: .cwInk)
+                        .frame(width: Self.buttonWidth, height: Self.buttonWidth)
+                        .glassEffect(.regular.interactive(), in: .circle)
+                        .scaleEffect(0.5 + 0.5 * shown)
+                        .opacity(shown)
+                        .padding(.leading, min(Self.gap, reveal))
+                        .frame(width: reveal)
+                        .frame(maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(tr("删除"))
+            }
         }
-        .clipped()
         .gesture(LeftSwipePan(allowRightward: offset < -1, onBegan: {
             dragStart = offset
         }, onChanged: { dx in

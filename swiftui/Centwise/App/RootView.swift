@@ -43,7 +43,8 @@ struct RootView: View {
         }
         .background(Color.cwCanvas.ignoresSafeArea())
         .modifier(StoreOverlays(depth: 0))
-        .cwSheet(isPresented: $showSettings) { SettingsSheet() }
+        // Just tall enough for its rows; it scrolls on shorter screens.
+        .cwSheet(isPresented: $showSettings, height: min(700, UIScreen.main.bounds.height * 0.8)) { SettingsSheet() }
         .cwSheet(isPresented: $newEntry) { EntryEditor() }
         .cwSheet(item: $subscriptionEditing) { SubscriptionEditor(subscription: $0.subscription) }
         .cwSheet(isPresented: $devChooser) { CategoryChooser(kind: .expense, selectedID: "", onPick: { _ in }) }
@@ -135,8 +136,8 @@ struct RootView: View {
 
     private var header: some View {
         VStack(spacing: 0) {
-            if store.isDemo || store.loadingFailed {
-                Text(store.isDemo ? tr("预览模式 · 初始为演示数据 · 退出后不保存修改") : tr("账本读取失败 · 原文件已保留 · 写入已暂停"))
+            if store.loadingFailed {
+                Text(tr("账本读取失败 · 原文件已保留 · 写入已暂停"))
                     .cw(12, .medium, color: .cwMuted)
                     .frame(maxWidth: .infinity).frame(height: 26)
                     .background(Color.cwTrack)

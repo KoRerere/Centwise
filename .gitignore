@@ -24,3 +24,6 @@ PrivateData/
 *.mobileprovision
 *.pem
 *.key
+node_modules
+.nuxt
+.output

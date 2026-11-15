@@ -67,36 +67,21 @@ struct CategoriesPage: View {
         return PageList {
             PeriodSummary(spending: topSpending, tints: tints, emptyText: emptyText)
             if !groups.isEmpty {
-                VStack(spacing: 10) {
-                    CwCard(h: 14, v: 18) {
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6, alignment: .top), count: 5), spacing: 8) {
-                            ForEach(groups.map(\.head)) { line in
-                                Pressable(onTap: {
-                                    openedCategory = CategorySheetRequest(category: line.category, includeSubcategories: !line.directOnly,
-                                                                          title: line.directOnly ? tr("{name} · 未细分", ["name": line.category.name]) : nil)
-                                }, onLongPress: { budgetRequest = BudgetRequest(budget: line.budget, categoryID: line.category.id) }) {
-                                    VStack(spacing: 0) {
-                                        Circle().fill(Color.cwCanvas).frame(width: 52, height: 52).overlay(CategoryIcon(line.category, size: 26))
-                                        HStack(spacing: 4) {
-                                            Circle().fill(tints[line.category.id] ?? .cwMuted).frame(width: 6, height: 6)
-                                            Text(line.category.name).cw(12, .medium).lineLimit(1)
-                                        }
-                                        .padding(.top, 5)
-                                        AmountText(cents: line.spent, size: 12, weight: .semibold).padding(.top, 2)
-                                    }
-                                    .frame(height: 104)
+                CwCard(h: 14, v: 18) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6, alignment: .top), count: 4), spacing: 8) {
+                        ForEach(groups.map(\.head)) { line in
+                            Pressable(onTap: {
+                                openedCategory = CategorySheetRequest(category: line.category, includeSubcategories: !line.directOnly,
+                                                                      title: line.directOnly ? tr("{name} · 未细分", ["name": line.category.name]) : nil)
+                            }, onLongPress: { budgetRequest = BudgetRequest(budget: line.budget, categoryID: line.category.id) }) {
+                                VStack(spacing: 0) {
+                                    CategoryIcon(line.category, size: 30).frame(height: 44)
+                                    Text(line.category.name).cw(12, .medium).lineLimit(1).padding(.top, 5)
+                                    AmountText(cents: line.spent, size: 12, weight: .semibold).padding(.top, 2)
                                 }
-                                .accessibilityLabel(line.category.name)
+                                .frame(height: 96)
                             }
-                        }
-                    }
-                    HStack {
-                        Spacer()
-                        Pressable(onTap: { budgetRequest = BudgetRequest(categoryID: groups.first?.head.category.id) }) {
-                            HStack(spacing: 3) {
-                                LIcon("plus", size: 14, color: .cwAccent, strokeWidth: 2.5)
-                                Text(tr("分类预算")).cw(IOSText.footnote, .semibold, color: .cwAccent)
-                            }
+                            .accessibilityLabel(line.category.name)
                         }
                     }
                 }

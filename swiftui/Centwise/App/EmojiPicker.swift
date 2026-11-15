@@ -109,7 +109,7 @@ struct EmojiPicker: View {
             Haptics.selection()
             onSelected(emoji)
         } label: {
-            Text(emoji).font(.system(size: 26)).frame(width: 40, height: 40)
+            Text(emoji).font(.emoji(size: 26)).frame(width: 40, height: 40)
                 .background(Circle().fill(on ? Color.cwTrack : .clear))
                 .frame(maxWidth: .infinity).frame(height: 42)
                 .animation(.easeOut(duration: 0.16), value: on)

@@ -76,7 +76,7 @@ struct TransactionsPage: View {
     private func headerRows(_ count: Int, _ total: Int) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .lastTextBaseline) {
-                Text(heading).cw(19, .bold).frame(maxWidth: .infinity, alignment: .leading)
+                Text(heading).cw(17, .semibold).frame(maxWidth: .infinity, alignment: .leading)
                 AmountText(cents: total, size: 20, weight: .bold, sign: "").fixedSize()
             }
             if store.period != .day || allDates {
@@ -124,7 +124,8 @@ struct TransactionsPage: View {
             } else {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(groupedByDay(filtered), id: \.0) { day, items in
-                        DayHeadingView(day: day).padding(.top, 18).padding(.bottom, 2)
+                        // One day's bills need no day label: the card's heading already names the day.
+                        if store.period != .day || allDates { DayHeadingView(day: day).padding(.top, 18).padding(.bottom, 2) } else { Color.clear.frame(height: 8) }
                         ForEach(Array(items.enumerated()), id: \.element.id) { i, entry in
                             if i > 0 { RowDivider() }
                             EntryRow(entry: entry, onTap: { editing = entry })

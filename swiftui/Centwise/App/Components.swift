@@ -98,8 +98,8 @@ struct AmountText: View {
     var body: some View {
         let prefix = sign ?? (cents < 0 ? "−" : "")
         let digits = Money.text(abs(cents), symbol: false)
-        Text("\(prefix)\(Text(Money.symbol).font(.cw(size * 0.6, weight, brand: brand)).tracking(size * 0.04))\(digits)")
-            .font(.cw(size, weight, brand: brand))
+        Text("\(prefix)\(Text(Money.symbol).font(.cw(size * 0.6, weight, brand: brand, tabular: true)).tracking(size * 0.04))\(digits)")
+            .font(.cw(size, weight, brand: brand, tabular: true))
             .foregroundStyle(color)
             .lineLimit(1)
             .minimumScaleFactor(0.4)
@@ -511,7 +511,7 @@ struct UndoDeleteToast: View {
                     LIcon("trash", size: 16, color: .white.opacity(0.7))
                     Text(count == 1 ? tr("已删除账单") : tr("已删除 {n} 笔账单", ["n": count]))
                         .cw(14, color: .white).lineLimit(1)
-                    Spacer(minLength: 10).frame(maxWidth: 10)
+                    Rectangle().fill(Color.white.opacity(0.28)).frame(width: 1, height: 14).padding(.leading, 8)
                     Pressable(onTap: {
                         Haptics.selection()
                         withAnimation(IOSMotion.smooth) { _ = store.undoDelete() }
@@ -525,7 +525,7 @@ struct UndoDeleteToast: View {
                     .accessibilityLabel(tr("撤销删除"))
                 }
                 .padding(.leading, 16).padding(.trailing, 6).padding(.vertical, 4)
-                .frame(maxWidth: 360)
+                .fixedSize()
                 .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(scheme == .dark ? Color(hex: 0x2C2C2E) : Color(hex: 0x0A0A0A)))
                 .shadow(color: .black.opacity(0.18), radius: 10, y: 6)
                 .transition(.opacity.combined(with: .offset(y: 20)))
@@ -573,7 +573,9 @@ struct DashedRing: Shape {
         let sweep = 2 * Double.pi / Double(dashes)
         for i in 0..<dashes {
             let a = Double(i) * sweep
-            p.move(to: CGPoint(x: center.x + radius * cos(a), y: center.y + radius * sin(a)))
+            // CGFloat argument: with a Double, the device SDK finds cos/sin ambiguous between two modules.
+            let angle = CGFloat(a)
+            p.move(to: CGPoint(x: center.x + radius * cos(angle), y: center.y + radius * sin(angle)))
             p.addArc(center: center, radius: radius, startAngle: .radians(a), endAngle: .radians(a + sweep * 0.55), clockwise: false)
         }
         return p

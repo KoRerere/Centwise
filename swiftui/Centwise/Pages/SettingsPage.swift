@@ -85,7 +85,7 @@ struct SettingsSheet: View {
                         }) { Text(tr("当前版本：{version}", ["version": appVersion])) }
                     }
                 }
-                .padding(.horizontal, 16).padding(.top, 40).padding(.bottom, 32)
+                .padding(.horizontal, 16).padding(.top, 28).padding(.bottom, 32)
             }
             .sheetScroll()
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y + $0.contentInsets.top } action: { _, y in
