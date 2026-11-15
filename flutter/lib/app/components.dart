@@ -1103,15 +1103,16 @@ class EntryRow extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 11),
         child: Row(children: [
-          // Trackly-style bill icon: the bill's own picture in a dashed ring, its parent category as a
-          // small badge. Transfers and the like put their line icon in the same ring.
+          // Bill icon: the bill's own picture, enlarged and without a ring, its parent category as a
+          // small badge. Transfers and the like show their line icon the same way.
           if (category != null && (entry.kind == EntryKind.expense || entry.kind == EntryKind.income))
             BillIcon(
+              ring: false,
               badge: category.parentID == null ? null : store.ledger.categoryByID(category.parentID!),
-              child: CategoryIcon(category, size: 26, color: tint),
+              child: CategoryIcon(category, size: 34, color: tint),
             )
           else
-            BillIcon(child: LIcon(icon, size: 19, color: tint)),
+            BillIcon(ring: false, child: LIcon(icon, size: 24, color: tint)),
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1138,10 +1139,13 @@ class EntryRow extends StatelessWidget {
 /// A bill's icon, after Trackly 得意記: the picture centred in a light dashed ring, with an optional
 /// small round badge at the lower left showing the parent category on a pale tint of its colour.
 class BillIcon extends StatelessWidget {
-  const BillIcon({super.key, required this.child, this.badge, this.size = 46});
+  const BillIcon({super.key, required this.child, this.badge, this.size = 46, this.ring = true});
   final Widget child;
   final LedgerCategory? badge;
   final double size;
+
+  /// Whether to draw the light dashed ring around the picture (bill rows go without it).
+  final bool ring;
 
   /// Where a row's text starts after this icon (icon + 12 pt gap); row separators inset to it.
   static const double textInset = 58;
@@ -1155,7 +1159,7 @@ class BillIcon extends StatelessWidget {
       width: size,
       height: size,
       child: Stack(clipBehavior: Clip.none, children: [
-        Positioned.fill(child: CustomPaint(painter: _DashedRingPainter(p.muted.withValues(alpha: 0.38)))),
+        if (ring) Positioned.fill(child: CustomPaint(painter: _DashedRingPainter(p.muted.withValues(alpha: 0.38)))),
         Center(child: child),
         if (badge != null)
           Positioned(
