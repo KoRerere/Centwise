@@ -28,6 +28,7 @@ struct RootView: View {
     @State private var searchRequest = false
     @State private var launched = false
     @State private var devChooser = false
+    @State private var devCategory = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -47,6 +48,7 @@ struct RootView: View {
         .cwSheet(isPresented: $showSettings, height: min(700, UIScreen.main.bounds.height * 0.8)) { SettingsSheet() }
         .cwSheet(isPresented: $newEntry) { EntryEditor() }
         .cwSheet(item: $subscriptionEditing) { SubscriptionEditor(subscription: $0.subscription) }
+        .cwSheet(isPresented: $devCategory) { CategoryEditor() }
         .cwSheet(isPresented: $devChooser) { CategoryChooser(kind: .expense, selectedID: "", onPick: { _ in }) }
         .onAppear(perform: launch)
     }
@@ -68,6 +70,7 @@ struct RootView: View {
         case "entry": newEntry = true
         case "subscription": subscriptionEditing = SubscriptionRequest()
         case "chooser": devChooser = true
+        case "category": devCategory = true
         default: break
         }
     }

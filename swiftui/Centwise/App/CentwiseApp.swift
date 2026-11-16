@@ -8,20 +8,24 @@ struct CentwiseApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .id(store.languageVersion)
-                .environment(store)
-                .environment(\.locale, L10n.locale)
-                .preferredColorScheme(store.colorScheme)
-                .tint(.cwInk)
-                .onReceive(clock) { _ in store.refreshDay() }
-                .onChange(of: scenePhase) { _, phase in
-                    switch phase {
-                    case .active: store.refreshDay()
-                    case .background: store.dismissUndo()
-                    default: break
-                    }
-                }
+            app
         }
+    }
+
+    private var app: some View {
+        RootView()
+            .id(store.languageVersion)
+            .environment(store)
+            .environment(\.locale, L10n.locale)
+            .preferredColorScheme(store.colorScheme)
+            .tint(.cwInk)
+            .onReceive(clock) { _ in store.refreshDay() }
+            .onChange(of: scenePhase) { _, phase in
+                switch phase {
+                case .active: store.refreshDay()
+                case .background: store.dismissUndo()
+                default: break
+                }
+            }
     }
 }

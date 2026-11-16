@@ -308,34 +308,39 @@ struct CategoryEditor: View {
         let parent = store.ledger.category(parentID)
         let changed = editing == nil || trimmed != editing!.name || icon != categoryIcon(editing!) || parentID != editing!.parentID
         SheetScaffold(title: editing == nil ? tr("新分类") : tr("编辑分类"), trailingLabel: tr("保存"), onTrailing: trimmed.isEmpty || !changed ? nil : save) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if editing == nil {
-                        CapsuleSegments(values: [EntryKind.expense, .income], selected: kind, label: \.title) { kind = $0; parentID = nil }
-                            .padding(.bottom, 18)
-                    }
-                    FormSection {
-                        HStack(spacing: 10) {
-                            EmojiIcon(icon, size: 22)
-                            FormTextField(text: $name, hint: tr("分类名称"))
-                        }
-                        if !hasChildren {
-                            FormRow(label: tr("上级分类"), chevron: true, onTap: { pickingParent = true }) { Text(parent?.name ?? tr("无")) }
-                        }
-                    }
-                    CardCaption(tr("图标")).padding(.top, 18).padding(.bottom, 10)
-                    EmojiPicker(selected: emojiFor(icon), common: categoryIconChoices.map { categoryEmojiMap[$0]! }) { icon = iconKeyForEmoji($0) }
+            // No scroll view: the icon ball takes every drag, and fills the rest of the sheet.
+            VStack(alignment: .leading, spacing: 0) {
+                if editing == nil {
+                    CapsuleSegments(values: [EntryKind.expense, .income], selected: kind, label: \.title) { kind = $0; parentID = nil }
+                        .padding(.bottom, 18)
                 }
-                .padding(.horizontal, 18).padding(.top, 8).padding(.bottom, 32)
+                FormSection {
+                    HStack(spacing: 10) {
+                        EmojiIcon(icon, size: 22)
+                            .contentTransition(.interpolate)
+                            .animation(.spring(duration: 0.3, bounce: 0.3), value: icon)
+                        FormTextField(text: $name, hint: tr("分类名称"))
+                    }
+                    if !hasChildren {
+                        FormRow(label: tr("上级分类"), chevron: true, onTap: { pickingParent = true }) { Text(parent?.name ?? tr("无")) }
+                    }
+                }
+                CardCaption(tr("图标")).padding(.top, 18).padding(.bottom, 10)
+                SphereIconPicker(selected: emojiFor(icon), defaults: Self.iconDefaults) { icon = iconKeyForEmoji($0) }
             }
-            .sheetScroll()
-            .scrollDismissesKeyboard(.immediately)
+            .padding(.horizontal, 18).padding(.top, 8).padding(.bottom, 12)
         }
         .cwSheet(isPresented: $pickingParent) {
             CategoryChooser(kind: kind, selectedID: parentID ?? "", title: tr("上级分类"), leadingLabel: tr("无"), leadingIcon: "circle-x",
                             topLevelOnly: true, excludeID: editing?.id, showAdd: false, onPick: { parentID = $0.isEmpty ? nil : $0 })
         }
     }
+
+    /// The curated category emoji, one each, leading the icon ball's grid.
+    private static let iconDefaults: [String] = {
+        var seen = Set<String>()
+        return categoryIconChoices.compactMap { categoryEmojiMap[$0] }.filter { seen.insert($0).inserted }
+    }()
 
     private func save() {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
