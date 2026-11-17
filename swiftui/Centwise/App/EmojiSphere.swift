@@ -53,11 +53,13 @@ private enum Sphere {
     /// Flat-grid distance from the middle of the sphere to its rim (a quarter of the way round).
     static let reach = CGFloat.pi / 2 * radius
 
-    static let pillThickness: CGFloat = 34
+    static let pillThickness: CGFloat = 48
     /// From the sphere's surface to the pill's centre line.
-    static let pillOffset: CGFloat = 25
-    /// Where the pill starts, measured clockwise from the right (so 203° is the lower left of the top-left arc).
-    static let pillStart: CGFloat = 203 * .pi / 180
+    static let pillOffset: CGFloat = 32
+    /// Where the pill is centred, measured clockwise from the right (270° = straight above the ball).
+    static let pillCentre: CGFloat = 270 * .pi / 180
+    /// How far either side of `pillCentre` a tap still counts as hitting the pill.
+    static let pillHitSpan: CGFloat = 0.75
     static let focusBlue = Color(red: 0.30, green: 0.56, blue: 0.96)
 }
 
@@ -187,11 +189,11 @@ struct SphereIconPicker: View {
             pick(i)
             return
         }
-        // The band the pill lives in, across the top-left of the ball.
+        // The band the pill lives in, centred above the ball.
         var angle = atan2(dy, dx)
         if angle < 0 { angle += 2 * .pi }
         let band = abs(r - layout.radius - Sphere.pillOffset) < Sphere.pillThickness / 2 + 8
-        if band && angle > Sphere.pillStart - 0.15 && angle < 5.4 {
+        if band && abs(angle - Sphere.pillCentre) < Sphere.pillHitSpan {
             if searching { step() } else { searching = true }
         }
     }
@@ -301,30 +303,32 @@ private struct SphereCanvas: View, Animatable {
             }
         }
         let big = CGSize(width: 400, height: 100)
-        let icon = ctx.resolve(Text(Image(systemName: "magnifyingglass")).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.cwMuted))
+        let icon = ctx.resolve(Text(Image(systemName: "magnifyingglass")).font(.system(size: 20, weight: .semibold)).foregroundStyle(Color.cwMuted))
 
         // What sits along the pill, left to right: a width, and what to draw there (nil = a gap).
         var items: [(GraphicsContext.ResolvedText?, CGFloat)] = [(icon, icon.measure(in: big).width), (nil, 5)]
         var caretAt: Int?
         if query.isEmpty {
             if focused { caretAt = items.count; items.append((nil, 3)) }
-            items += glyphs(placeholder, .cw(15, .medium), .cwMuted).map { ($0.0, $0.1) }
+            items += glyphs(placeholder, .cw(20, .medium), .cwMuted).map { ($0.0, $0.1) }
         } else {
-            items += glyphs(String(query.suffix(12)), .cw(15, .bold), .cwInk).map { ($0.0, $0.1) }
+            items += glyphs(String(query.suffix(12)), .cw(20, .bold), .cwInk).map { ($0.0, $0.1) }
             if focused { caretAt = items.count; items.append((nil, 3)) }
             items.append((nil, 6))
-            items += glyphs(counter, .cw(13, .medium), .cwMuted).map { ($0.0, $0.1) }
+            items += glyphs(counter, .cw(16, .medium), .cwMuted).map { ($0.0, $0.1) }
         }
 
         let r = radius + Sphere.pillOffset
         let thickness = Sphere.pillThickness
-        let padding: CGFloat = 13
+        let padding: CGFloat = 18
         let length = items.reduce(padding * 2) { $0 + $1.1 }
+        // Centred on the top of the ball, so it grows evenly both ways as the query gets longer.
+        let pillStart = Sphere.pillCentre - length / 2 / r
 
         var line = Path()
         line.addArc(center: center, radius: r,
-                    startAngle: .radians(Sphere.pillStart + thickness / 2 / r),
-                    endAngle: .radians(Sphere.pillStart + (length - thickness / 2) / r),
+                    startAngle: .radians(pillStart + thickness / 2 / r),
+                    endAngle: .radians(pillStart + (length - thickness / 2) / r),
                     clockwise: false)
         let body = line.strokedPath(StrokeStyle(lineWidth: thickness, lineCap: .round))
         ctx.fill(body, with: .color(.cwTrack))
@@ -332,7 +336,7 @@ private struct SphereCanvas: View, Animatable {
 
         var along = padding
         for (n, item) in items.enumerated() {
-            let angle = Sphere.pillStart + (along + item.1 / 2) / r
+            let angle = pillStart + (along + item.1 / 2) / r
             along += item.1
             var g = ctx
             g.translateBy(x: center.x + r * cos(angle), y: center.y + r * sin(angle))
@@ -340,7 +344,7 @@ private struct SphereCanvas: View, Animatable {
             if let text = item.0 {
                 g.draw(text, at: .zero)
             } else if n == caretAt {
-                g.fill(Path(roundedRect: CGRect(x: -1, y: -9, width: 2, height: 18), cornerRadius: 1), with: .color(Sphere.focusBlue))
+                g.fill(Path(roundedRect: CGRect(x: -1, y: -12, width: 2, height: 24), cornerRadius: 1), with: .color(Sphere.focusBlue))
             }
         }
     }
